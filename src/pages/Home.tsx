@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Code, Terminal, Book, MessagesSquare, BookOpen, PenTool } from 'lucide-react';
+import { Terminal, Book, MessagesSquare, BookOpen, PenTool } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import FeatureCard from '@/components/FeatureCard';
@@ -26,7 +26,7 @@ const Home = () => {
         >
           <div className="flex flex-col items-center text-center max-w-3xl mx-auto">
             <div className="mb-6 p-3 bg-white/10 rounded-full backdrop-blur-sm border border-white/30">
-              <Code className="h-10 w-10 text-white" />
+              <div className="text-white text-2xl font-mono font-bold">{`</>`}</div>
             </div>
             <h1 className="text-4xl md:text-6xl font-bold mb-4">
               CODEGEN
@@ -65,32 +65,32 @@ const Home = () => {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <FeatureCard 
               title="Online Compiler"
               description="Write, run, and debug your code in multiple programming languages directly in your browser."
-              icon={<Terminal className="h-7 w-7 text-codegen-purple" />}
+              icon={<Terminal className="h-6 w-6 text-codegen-purple" />}
               to="/compiler"
               delay={0.1}
             />
             <FeatureCard 
               title="Coding Practice"
               description="Strengthen your skills with our curated collection of coding problems, from beginners to advanced levels."
-              icon={<Code className="h-7 w-7 text-codegen-purple" />}
+              icon={<Book className="h-6 w-6 text-codegen-purple" />}
               to="/practice"
               delay={0.2}
             />
             <FeatureCard 
               title="Interview Preparation"
               description="Get ready for technical interviews with comprehensive resources and practice materials."
-              icon={<MessagesSquare className="h-7 w-7 text-codegen-purple" />}
+              icon={<MessagesSquare className="h-6 w-6 text-codegen-purple" />}
               to="/interview"
               delay={0.3}
             />
             <FeatureCard 
               title="Learning Resources"
               description="Access a rich collection of tutorials, documentation, and external resources to enhance your learning."
-              icon={<BookOpen className="h-7 w-7 text-codegen-purple" />}
+              icon={<BookOpen className="h-6 w-6 text-codegen-purple" />}
               to="/resources"
               delay={0.4}
             />

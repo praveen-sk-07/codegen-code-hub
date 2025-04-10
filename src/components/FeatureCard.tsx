@@ -29,20 +29,20 @@ const FeatureCard = ({
       viewport={{ once: true }}
       className={`feature-card ${className}`}
     >
-      <div className="h-full flex flex-col p-6">
-        <div className="h-14 w-14 bg-codegen-purple/10 rounded-lg flex items-center justify-center mb-4">
+      <div className="h-full flex flex-col p-4">
+        <div className="h-12 w-12 bg-codegen-purple/10 rounded-lg flex items-center justify-center mb-3">
           {icon}
         </div>
-        <h3 className="text-xl font-semibold mb-2">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-300 mb-4 flex-grow">
+        <h3 className="text-lg font-semibold mb-1">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-300 mb-3 flex-grow text-sm">
           {description}
         </p>
         <Link
           to={to}
-          className="flex items-center text-codegen-purple font-medium hover:underline transition-all"
+          className="flex items-center text-codegen-purple font-medium hover:underline transition-all text-sm"
         >
           Explore
-          <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+          <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
         </Link>
       </div>
     </motion.div>

@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,8 +12,9 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/components/ui/use-toast';
-import { Eye, EyeOff, Mail, Lock, User, Building, UserRound, Code } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Building, UserRound, Briefcase, Code } from 'lucide-react';
 import BackButton from '@/components/BackButton';
+import { useAuth } from '@/contexts/AuthContext';
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -40,6 +41,17 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { register, login, isAuthenticated, checkUsernameAvailability, checkEmailAvailability } = useAuth();
+  const navigate = useNavigate();
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState(true);
+  const [isEmailAvailable, setIsEmailAvailable] = useState(true);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/profile');
+    }
+  }, [isAuthenticated, navigate]);
 
   // Login form
   const loginForm = useForm<LoginFormValues>({
@@ -65,34 +77,81 @@ const Login = () => {
   });
 
   const userType = registerForm.watch('userType');
+  const watchUsername = registerForm.watch('username');
+  const watchEmail = registerForm.watch('email');
 
-  const onLoginSubmit = (data: LoginFormValues) => {
+  // Check username availability
+  React.useEffect(() => {
+    if (activeTab === 'register' && watchUsername) {
+      const checkUsername = async () => {
+        if (watchUsername.length >= 3) {
+          const isAvailable = await checkUsernameAvailability(watchUsername);
+          setIsUsernameAvailable(isAvailable);
+        }
+      };
+      
+      const timer = setTimeout(() => {
+        checkUsername();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [watchUsername, activeTab, checkUsernameAvailability]);
+
+  // Check email availability
+  React.useEffect(() => {
+    if (activeTab === 'register' && watchEmail) {
+      const checkEmail = async () => {
+        if (watchEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+          const isAvailable = await checkEmailAvailability(watchEmail);
+          setIsEmailAvailable(isAvailable);
+        }
+      };
+      
+      const timer = setTimeout(() => {
+        checkEmail();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [watchEmail, activeTab, checkEmailAvailability]);
+
+  const onLoginSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      console.log("Login data:", data);
+    try {
+      await login(data.email, data.password, data.rememberMe || false);
+      navigate('/profile');
+    } catch (error) {
       toast({
-        title: "Login Successful",
-        description: "Welcome back to CODEGEN!",
+        title: "Login Failed",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
       });
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
-  const onRegisterSubmit = (data: RegisterFormValues) => {
+  const onRegisterSubmit = async (data: RegisterFormValues) => {
+    if (!isUsernameAvailable || !isEmailAvailable) {
+      return;
+    }
+    
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      console.log("Registration data:", data);
+    try {
+      await register(data);
+      navigate('/profile');
+    } catch (error) {
       toast({
-        title: "Registration Successful",
-        description: "Your CODEGEN account has been created!",
+        title: "Registration Failed",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
       });
+    } finally {
       setIsSubmitting(false);
-      setActiveTab('login');
-    }, 1500);
+    }
   };
 
   return (
@@ -248,7 +307,7 @@ const Login = () => {
                                 className={`flex items-center justify-center ${field.value === 'professional' ? 'bg-codegen-purple' : ''}`}
                                 onClick={() => field.onChange('professional')}
                               >
-                                <Building className="mr-2 h-4 w-4" />
+                                <Briefcase className="mr-2 h-4 w-4" />
                                 Professional
                               </Button>
                             </div>
@@ -316,6 +375,15 @@ const Login = () => {
                                   className="pl-9" 
                                   {...field} 
                                 />
+                                {field.value.length >= 3 && (
+                                  <div className="absolute right-3 top-3">
+                                    {isUsernameAvailable ? (
+                                      <span className="text-green-500 text-sm">Available</span>
+                                    ) : (
+                                      <span className="text-red-500 text-sm">Username taken</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -337,6 +405,15 @@ const Login = () => {
                                   className="pl-9" 
                                   {...field} 
                                 />
+                                {field.value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) && (
+                                  <div className="absolute right-3 top-3">
+                                    {isEmailAvailable ? (
+                                      <span className="text-green-500 text-sm">Available</span>
+                                    ) : (
+                                      <span className="text-red-500 text-sm">Email taken</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -382,7 +459,7 @@ const Login = () => {
                       <Button 
                         type="submit" 
                         className="w-full bg-codegen-purple hover:bg-codegen-purple/90"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || !isUsernameAvailable || !isEmailAvailable}
                       >
                         {isSubmitting ? (
                           <span className="flex items-center">
