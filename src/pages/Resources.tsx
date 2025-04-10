@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BackButton from '@/components/BackButton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, YoutubeIcon, FileText, BookOpen, Download } from 'lucide-react';
+import { ExternalLink, YoutubeIcon, FileText, BookOpen, Download, RefreshCw } from 'lucide-react';
 
 const youtubeResources = [
   {
@@ -280,7 +279,6 @@ const Resources = () => {
   const [isConceptualPracticeLoading, setIsConceptualPracticeLoading] = useState(true);
   const [iframeKey, setIframeKey] = useState(Date.now());
 
-  // Handle conceptual practice loading
   React.useEffect(() => {
     if (activeTab === 'conceptual') {
       const timer = setTimeout(() => {
@@ -328,7 +326,6 @@ const Resources = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* YouTube Tutorials */}
           <TabsContent value="youtube" className="space-y-6">
             <div className="grid grid-cols-1 gap-6">
               {selectedYoutubeId ? (
@@ -388,7 +385,6 @@ const Resources = () => {
             </div>
           </TabsContent>
 
-          {/* Documents */}
           <TabsContent value="documents">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {documentResources.map((doc, index) => (
@@ -431,7 +427,6 @@ const Resources = () => {
             </div>
           </TabsContent>
 
-          {/* Conceptual Practice */}
           <TabsContent value="conceptual">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden h-[calc(100vh-240px)] relative">
               <div className="absolute top-4 right-4 z-10">
@@ -476,7 +471,6 @@ const Resources = () => {
             </div>
           </TabsContent>
 
-          {/* External Links */}
           <TabsContent value="external">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {externalLinks.map((link, index) => (
