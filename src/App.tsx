@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./contexts/AuthContext";
+import AuthGuard from "./components/AuthGuard";
 
 const queryClient = new QueryClient();
 
@@ -28,11 +29,27 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/compiler" element={<Compiler />} />
-              <Route path="/practice" element={<Practice />} />
-              <Route path="/interview" element={<Interview />} />
-              <Route path="/resources" element={<Resources />} />
+              <Route path="/practice" element={
+                <AuthGuard>
+                  <Practice />
+                </AuthGuard>
+              } />
+              <Route path="/interview" element={
+                <AuthGuard>
+                  <Interview />
+                </AuthGuard>
+              } />
+              <Route path="/resources" element={
+                <AuthGuard>
+                  <Resources />
+                </AuthGuard>
+              } />
               <Route path="/login" element={<Login />} />
-              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile" element={
+                <AuthGuard>
+                  <Profile />
+                </AuthGuard>
+              } />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
