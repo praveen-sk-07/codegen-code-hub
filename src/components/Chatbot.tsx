@@ -54,8 +54,6 @@ const sampleResponses: Record<string, string> = {
   "help": "I can help with coding questions, explain programming concepts, guide you in using CODEGEN features, or provide resources for learning. Just ask me what you'd like to know!"
 };
 
-const GEMINI_API_KEY = "AIzaSyCIlGpkXmyhqhngvMyFWAV1t5IrIJsIc1w"; // API key
-
 const initialMessages: Message[] = [
   {
     id: 1,
@@ -70,6 +68,8 @@ const Chatbot = () => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -80,52 +80,74 @@ const Chatbot = () => {
     }
   }, [messages]);
 
-  // Function to get response from Gemini API
-  const getGeminiResponse = async (prompt: string): Promise<string> => {
+  // Load API key from localStorage if available
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('perplexityApiKey');
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
+      setShowApiKeyInput(false);
+    } else {
+      setShowApiKeyInput(true);
+    }
+  }, []);
+
+  // Function to save API key
+  const handleSaveApiKey = () => {
+    if (apiKey.trim() !== '') {
+      localStorage.setItem('perplexityApiKey', apiKey);
+      setShowApiKeyInput(false);
+      toast({
+        title: "API Key Saved",
+        description: "Your Perplexity API key has been saved successfully.",
+      });
+    }
+  };
+
+  // Function to get response from Perplexity API
+  const getPerplexityResponse = async (prompt: string): Promise<string> => {
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `You are CodeHelp, a helpful coding assistant for the CODEGEN platform.
-                    Answer the following coding or programming question concisely:
-                    ${prompt}
-                    Keep your response under 250 words and focused on helping programmers.`
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 1024,
+      if (!apiKey) {
+        throw new Error('API key not provided');
+      }
+
+      const response = await fetch('https://api.perplexity.ai/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-sonar-small-128k-online',
+          messages: [
+            {
+              role: 'system',
+              content: `You are CodeHelp, a helpful coding assistant for the CODEGEN platform. 
+              You specialize in helping with programming questions in C, C++, Java, Python, and JavaScript, 
+              particularly on data structures and algorithms. You provide clear, concise code examples and explanations. 
+              You also provide answers about the CODEGEN platform based on the following information:
+              CODEGEN is an advanced online coding workspace designed for students and professionals. 
+              It provides an integrated environment for coding practice, interview preparation, and learning resources.
+              Users need to register to access the full functionality. The compiler supports multiple languages.`
             },
-          }),
-        }
-      );
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.2,
+          top_p: 0.9,
+          max_tokens: 1000,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
       const data = await response.json();
-      
-      if (data.candidates && data.candidates[0]?.content?.parts?.length > 0) {
-        return data.candidates[0].content.parts[0].text;
-      } else {
-        throw new Error('Unexpected response format from API');
-      }
+      return data.choices[0].message.content;
     } catch (error) {
-      console.error('Error fetching Gemini response:', error);
+      console.error('Error fetching Perplexity response:', error);
       return handleFallbackResponse(prompt);
     }
   };
@@ -165,11 +187,29 @@ const Chatbot = () => {
       return "You're welcome! If you have more questions, feel free to ask anytime.";
     }
 
+    // Special case for DSA questions
+    if (lowercasePrompt.includes('algorithm') || lowercasePrompt.includes('data structure')) {
+      return "I can help with data structures and algorithms! Please specify what particular concept you're interested in (sorting, searching, trees, graphs, etc.) and which programming language you prefer for examples.";
+    }
+
     return "I'm not sure how to help with that specific question. Could you rephrase or ask something related to coding, programming concepts, or the CODEGEN platform?";
   };
 
   const handleSendMessage = () => {
     if (inputMessage.trim() === '') return;
+    
+    // If API key input is shown and user sends a message, interpret it as the API key
+    if (showApiKeyInput) {
+      setApiKey(inputMessage);
+      localStorage.setItem('perplexityApiKey', inputMessage);
+      setShowApiKeyInput(false);
+      setInputMessage('');
+      toast({
+        title: "API Key Saved",
+        description: "Your Perplexity API key has been saved successfully.",
+      });
+      return;
+    }
 
     // Add user message
     const userMessage: Message = {
@@ -183,8 +223,8 @@ const Chatbot = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    // Get response from Gemini API
-    getGeminiResponse(inputMessage)
+    // Get response from Perplexity API
+    getPerplexityResponse(inputMessage)
       .then(response => {
         const botMessage: Message = {
           id: messages.length + 2,
@@ -222,6 +262,16 @@ const Chatbot = () => {
     }
   };
 
+  const handleResetApiKey = () => {
+    localStorage.removeItem('perplexityApiKey');
+    setApiKey('');
+    setShowApiKeyInput(true);
+    toast({
+      title: "API Key Reset",
+      description: "Your Perplexity API key has been removed.",
+    });
+  };
+
   return (
     <>
       {/* Chat Button */}
@@ -256,61 +306,93 @@ const Chatbot = () => {
               </Button>
             </div>
 
-            {/* Chat Messages */}
-            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                        message.sender === 'user'
-                          ? 'bg-codegen-purple text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                      }`}
-                    >
-                      <p className="text-sm">{message.content}</p>
-                      <p className="text-[10px] mt-1 opacity-70">
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-4 py-2">
-                      <div className="flex space-x-1">
-                        <span className="animate-bounce">●</span>
-                        <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>●</span>
-                        <span className="animate-bounce" style={{ animationDelay: '0.4s' }}>●</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+            {/* API Key Input */}
+            {showApiKeyInput ? (
+              <div className="p-4 bg-gray-50 dark:bg-gray-900">
+                <p className="text-sm mb-2">Please enter your Perplexity API key to use advanced features:</p>
+                <div className="flex gap-2">
+                  <Input 
+                    type="password" 
+                    placeholder="Enter your API key" 
+                    value={apiKey} 
+                    onChange={(e) => setApiKey(e.target.value)} 
+                    className="flex-1"
+                  />
+                  <Button onClick={handleSaveApiKey} disabled={apiKey.trim() === ''}>Save</Button>
+                </div>
+                <p className="text-xs mt-2 text-gray-500">You can get an API key from <a href="https://www.perplexity.ai/" target="_blank" rel="noopener noreferrer" className="underline">perplexity.ai</a></p>
               </div>
-            </ScrollArea>
+            ) : (
+              <>
+                {/* Chat Messages */}
+                <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+                  <div className="space-y-4">
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                            message.sender === 'user'
+                              ? 'bg-codegen-purple text-white'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                          }`}
+                        >
+                          <p className="text-sm">{message.content}</p>
+                          <p className="text-[10px] mt-1 opacity-70">
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {isTyping && (
+                      <div className="flex justify-start">
+                        <div className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg px-4 py-2">
+                          <div className="flex space-x-1">
+                            <span className="animate-bounce">●</span>
+                            <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>●</span>
+                            <span className="animate-bounce" style={{ animationDelay: '0.4s' }}>●</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
 
-            {/* Input Area */}
-            <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex items-end gap-2">
-              <Textarea
-                placeholder="Type your message..."
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={handleKeyPress}
-                className="min-h-[40px] max-h-[120px] resize-none"
-                rows={1}
-              />
-              <Button
-                size="icon"
-                className="bg-codegen-purple hover:bg-codegen-purple/90 h-10 w-10 rounded-full flex-shrink-0"
-                onClick={handleSendMessage}
-                disabled={inputMessage.trim() === ''}
-              >
-                <Send size={18} />
-              </Button>
-            </div>
+                {/* Input Area */}
+                <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex flex-col gap-2">
+                  <div className="flex items-end gap-2">
+                    <Textarea
+                      placeholder="Type your message..."
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      className="min-h-[40px] max-h-[120px] resize-none"
+                      rows={1}
+                    />
+                    <Button
+                      size="icon"
+                      className="bg-codegen-purple hover:bg-codegen-purple/90 h-10 w-10 rounded-full flex-shrink-0"
+                      onClick={handleSendMessage}
+                      disabled={inputMessage.trim() === ''}
+                    >
+                      <Send size={18} />
+                    </Button>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs text-gray-500"
+                      onClick={handleResetApiKey}
+                    >
+                      Reset API Key
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
