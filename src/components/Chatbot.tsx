@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from "@/components/ui/use-toast";
 
 interface Message {
   id: number;
@@ -14,13 +15,32 @@ interface Message {
   timestamp: Date;
 }
 
-const initialMessages: Message[] = [
+// Include project-related FAQs
+const projectFAQs = [
   {
-    id: 1,
-    content: "Hello! I'm CodeHelp, your coding assistant. How can I help you today?",
-    sender: 'bot',
-    timestamp: new Date(),
+    question: "What is CODEGEN?",
+    answer: "CODEGEN is an advanced online coding workspace designed for students and professionals. It provides an integrated environment for coding practice, interview preparation, and learning resources."
   },
+  {
+    question: "Do I need to create an account to use CODEGEN?",
+    answer: "While you can access some features without an account, registration is required to access the full functionality, such as practice questions, tracking your progress, and personalizing your learning experience."
+  },
+  {
+    question: "What programming languages are supported in the compiler?",
+    answer: "Our compiler supports a wide range of programming languages including but not limited to JavaScript, Python, C++, Java, and many more. You can write, execute, and debug code directly in your browser."
+  },
+  {
+    question: "How can I prepare for technical interviews using CODEGEN?",
+    answer: "CODEGEN offers an Interview Preparation section with HR questions, technical interview questions, and coding challenges typically asked in top tech companies. You can practice these questions and improve your interview skills."
+  },
+  {
+    question: "Are the learning resources free?",
+    answer: "Yes, all learning resources provided in CODEGEN are free for registered users. These include video tutorials, documentation, articles, and external links to valuable coding practice websites."
+  },
+  {
+    question: "How can I contribute to CODEGEN or report issues?",
+    answer: "You can provide feedback using our Feedback Form located throughout the platform. We value your suggestions and bug reports to continuously improve the platform for everyone."
+  }
 ];
 
 // Sample responses for common coding questions
@@ -34,11 +54,23 @@ const sampleResponses: Record<string, string> = {
   "help": "I can help with coding questions, explain programming concepts, guide you in using CODEGEN features, or provide resources for learning. Just ask me what you'd like to know!"
 };
 
+const GEMINI_API_KEY = "AIzaSyCIlGpkXmyhqhngvMyFWAV1t5IrIJsIc1w"; // API key
+
+const initialMessages: Message[] = [
+  {
+    id: 1,
+    content: "Hello! I'm CodeHelp, your coding assistant. How can I help you today?",
+    sender: 'bot',
+    timestamp: new Date(),
+  },
+];
+
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when new messages arrive
@@ -47,6 +79,94 @@ const Chatbot = () => {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Function to get response from Gemini API
+  const getGeminiResponse = async (prompt: string): Promise<string> => {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `You are CodeHelp, a helpful coding assistant for the CODEGEN platform.
+                    Answer the following coding or programming question concisely:
+                    ${prompt}
+                    Keep your response under 250 words and focused on helping programmers.`
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 1024,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.candidates && data.candidates[0]?.content?.parts?.length > 0) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        throw new Error('Unexpected response format from API');
+      }
+    } catch (error) {
+      console.error('Error fetching Gemini response:', error);
+      return handleFallbackResponse(prompt);
+    }
+  };
+
+  // Fallback response mechanism
+  const handleFallbackResponse = (prompt: string): string => {
+    // First check project FAQs
+    const lowercasePrompt = prompt.toLowerCase();
+    
+    for (const faq of projectFAQs) {
+      if (lowercasePrompt.includes(faq.question.toLowerCase())) {
+        return faq.answer;
+      }
+    }
+    
+    // Then check our predefined samples
+    for (const [key, value] of Object.entries(sampleResponses)) {
+      if (lowercasePrompt.includes(key)) {
+        return value;
+      }
+    }
+    
+    // Check for CODEGEN specific questions
+    if (lowercasePrompt.includes('what is codegen') || 
+        lowercasePrompt.includes('about codegen') ||
+        lowercasePrompt.includes('tell me about codegen')) {
+      return "CODEGEN is an advanced online coding workspace designed for students and professionals. It provides an integrated environment for coding practice, interview preparation, and learning resources. You can practice coding, prepare for interviews, and access educational resources all in one platform.";
+    }
+    
+    // Special cases for greetings
+    if (lowercasePrompt.match(/^(hi|hello|hey|greetings)/i)) {
+      return "Hello! How can I assist you with coding or using the CODEGEN platform today?";
+    }
+    
+    // Special case for thank you
+    if (lowercasePrompt.match(/thank you|thanks/i)) {
+      return "You're welcome! If you have more questions, feel free to ask anytime.";
+    }
+
+    return "I'm not sure how to help with that specific question. Could you rephrase or ask something related to coding, programming concepts, or the CODEGEN platform?";
+  };
 
   const handleSendMessage = () => {
     if (inputMessage.trim() === '') return;
@@ -63,41 +183,36 @@ const Chatbot = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    // Simulate bot response with typing delay
-    setTimeout(() => {
-      let botResponse = "I'm not sure how to help with that. Could you try asking something related to coding or the CODEGEN platform?";
-      
-      // Check for predefined answers
-      const lowercaseInput = inputMessage.toLowerCase();
-      
-      // Try to match input with sample responses
-      for (const [key, value] of Object.entries(sampleResponses)) {
-        if (lowercaseInput.includes(key)) {
-          botResponse = value;
-          break;
-        }
-      }
-      
-      // Special cases for greetings
-      if (lowercaseInput.match(/^(hi|hello|hey|greetings)/i)) {
-        botResponse = "Hello! How can I assist you with coding or using the CODEGEN platform today?";
-      }
-      
-      // Special case for thank you
-      if (lowercaseInput.match(/thank you|thanks/i)) {
-        botResponse = "You're welcome! If you have more questions, feel free to ask anytime.";
-      }
+    // Get response from Gemini API
+    getGeminiResponse(inputMessage)
+      .then(response => {
+        const botMessage: Message = {
+          id: messages.length + 2,
+          content: response,
+          sender: 'bot',
+          timestamp: new Date(),
+        };
 
-      const botMessage: Message = {
-        id: messages.length + 2,
-        content: botResponse,
-        sender: 'bot',
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false);
-    }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
+        setMessages(prev => [...prev, botMessage]);
+        setIsTyping(false);
+      })
+      .catch(error => {
+        console.error('Error getting response:', error);
+        const errorMessage: Message = {
+          id: messages.length + 2,
+          content: "I'm having trouble connecting to my knowledge base right now. Let me try to help with what I know.",
+          sender: 'bot',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        setIsTyping(false);
+        
+        toast({
+          title: "Connection Error",
+          description: "Couldn't connect to AI service. Using fallback responses.",
+          variant: "destructive",
+        });
+      });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -134,7 +249,7 @@ const Chatbot = () => {
               <Bot className="mr-2" size={20} />
               <div className="flex-1">
                 <h3 className="font-medium">CodeHelp</h3>
-                <p className="text-xs opacity-90">Coding assistant</p>
+                <p className="text-xs opacity-90">AI coding assistant</p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-white/20">
                 <X size={18} />
