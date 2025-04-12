@@ -45,14 +45,41 @@ const Login = () => {
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(true);
   const [isEmailAvailable, setIsEmailAvailable] = useState(true);
 
-  // Redirect if already authenticated
+  const PasswordRequirements = ({ password }: { password: string }) => {
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const hasMinimumLength = password.length >= 8;
+    
+    const requirements = [
+      { label: "8+ characters", met: hasMinimumLength },
+      { label: "1 uppercase letter", met: hasUpperCase },
+      { label: "1 lowercase letter", met: hasLowerCase },
+      { label: "1 number", met: hasNumbers },
+      { label: "1 special character", met: hasSpecialChar },
+    ];
+    
+    return (
+      <div className="mt-2 space-y-1 text-xs">
+        {requirements.map((req, index) => (
+          <div key={index} className={`flex items-center ${req.met ? 'text-green-500' : 'text-gray-400'}`}>
+            <div className={`w-1 h-1 rounded-full mr-1.5 ${req.met ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+            {req.label}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const watchRegisterPassword = registerForm.watch('password');
+  
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/profile');
     }
   }, [isAuthenticated, navigate]);
 
-  // Login form
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -62,7 +89,6 @@ const Login = () => {
     }
   });
 
-  // Register form
   const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -79,7 +105,6 @@ const Login = () => {
   const watchUsername = registerForm.watch('username');
   const watchEmail = registerForm.watch('email');
 
-  // Check username availability
   React.useEffect(() => {
     if (activeTab === 'register' && watchUsername) {
       const checkUsername = async () => {
@@ -97,7 +122,6 @@ const Login = () => {
     }
   }, [watchUsername, activeTab, checkUsernameAvailability]);
 
-  // Check email availability
   React.useEffect(() => {
     if (activeTab === 'register' && watchEmail) {
       const checkEmail = async () => {
@@ -202,7 +226,6 @@ const Login = () => {
                   <TabsTrigger value="register">Register</TabsTrigger>
                 </TabsList>
                 
-                {/* Login Form */}
                 <TabsContent value="login">
                   <Form {...loginForm}>
                     <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
@@ -299,7 +322,6 @@ const Login = () => {
                   </Form>
                 </TabsContent>
                 
-                {/* Registration Form */}
                 <TabsContent value="register">
                   <Form {...registerForm}>
                     <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
@@ -470,6 +492,7 @@ const Login = () => {
                               </div>
                             </FormControl>
                             <FormMessage />
+                            {activeTab === 'register' && field.value && <PasswordRequirements password={field.value} />}
                           </FormItem>
                         )}
                       />

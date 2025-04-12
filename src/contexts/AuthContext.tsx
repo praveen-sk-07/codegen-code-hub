@@ -41,6 +41,17 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Password validation function
+const isStrongPassword = (password: string): boolean => {
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const hasMinimumLength = password.length >= 8;
+  
+  return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar && hasMinimumLength;
+};
+
 // Mock database for demonstration
 const mockUsers = [
   {
@@ -49,7 +60,7 @@ const mockUsers = [
     organization: 'Adhiyamaan College of Engineering',
     username: 'demouser',
     email: 'demo@example.com',
-    password: 'password123',
+    password: 'Password@123',
     userType: 'student' as UserType,
     profileImage: '',
     problemsSolved: 45,
@@ -59,10 +70,41 @@ const mockUsers = [
   }
 ];
 
+// Function to calculate rank based on problems solved
+const calculateRank = (problemsSolved: number): number => {
+  if (problemsSolved >= 100) return 1;
+  if (problemsSolved >= 80) return 2;
+  if (problemsSolved >= 60) return 3;
+  if (problemsSolved >= 40) return 4;
+  if (problemsSolved >= 20) return 5;
+  if (problemsSolved >= 10) return 6;
+  return 7;
+};
+
+// Function to get stored users from localStorage
+const getStoredUsers = (): (typeof mockUsers) => {
+  const storedUsers = localStorage.getItem('codegen_all_users');
+  if (storedUsers) {
+    try {
+      return JSON.parse(storedUsers);
+    } catch (e) {
+      console.error('Failed to parse stored users data:', e);
+      return mockUsers;
+    }
+  }
+  return mockUsers;
+};
+
+// Function to save users to localStorage
+const saveUsers = (users: typeof mockUsers) => {
+  localStorage.setItem('codegen_all_users', JSON.stringify(users));
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const [allUsers, setAllUsers] = useState(getStoredUsers());
 
   useEffect(() => {
     // Check for stored user data in localStorage on initial load
@@ -85,34 +127,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Check if user already exists
-    const userExists = mockUsers.some(u => u.email === data.email || u.username === data.username);
+    const userExists = allUsers.some(u => u.email === data.email || u.username === data.username);
     
     if (userExists) {
       setIsLoading(false);
       throw new Error('User with this email or username already exists');
     }
     
-    // Create new user with fallback for organization
+    // Validate password strength
+    if (!isStrongPassword(data.password)) {
+      setIsLoading(false);
+      throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
+    }
+    
+    // Create new user
     const newUser: User = {
       id: Date.now().toString(),
       fullName: data.fullName,
-      organization: data.organization || '', // Make sure organization is not undefined
+      organization: data.organization,
       username: data.username,
       email: data.email,
       userType: data.userType,
       profileImage: '',
       problemsSolved: 0,
       points: 0,
-      rank: mockUsers.length + 1,
+      rank: 7, // Default rank
       downloads: 0
     };
     
     // Add to mock database
-    mockUsers.push({ 
-      ...newUser, 
-      password: data.password, 
-      profileImage: '' // Make sure profileImage is not undefined
-    });
+    const updatedUsers = [
+      ...allUsers, 
+      { 
+        ...newUser, 
+        password: data.password,
+      }
+    ];
+    
+    setAllUsers(updatedUsers);
+    saveUsers(updatedUsers);
     
     // Update state and storage
     setUser(newUser);
@@ -131,8 +184,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Find user
-    const foundUser = mockUsers.find(u => u.email === email && u.password === password);
+    // Find user in the stored users
+    const foundUser = allUsers.find(u => u.email === email && u.password === password);
     
     if (!foundUser) {
       setIsLoading(false);
@@ -183,14 +236,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     
     const updatedUser = { ...user, ...data };
+    
+    // Update rank based on problems solved if problems were updated
+    if (data.problemsSolved !== undefined) {
+      updatedUser.rank = calculateRank(data.problemsSolved);
+    }
+    
     setUser(updatedUser);
     localStorage.setItem('codegen_user', JSON.stringify(updatedUser));
     
-    // Also update in mock database
-    const userIndex = mockUsers.findIndex(u => u.id === user.id);
-    if (userIndex !== -1) {
-      mockUsers[userIndex] = { ...mockUsers[userIndex], ...data };
-    }
+    // Also update in users database
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        return { ...u, ...data };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedUsers);
+    saveUsers(updatedUsers);
     
     toast({
       title: "Profile Updated",
@@ -201,13 +265,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkUsernameAvailability = async (username: string): Promise<boolean> => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    return !mockUsers.some(u => u.username === username && u.id !== user?.id);
+    return !allUsers.some(u => u.username === username && u.id !== user?.id);
   };
 
   const checkEmailAvailability = async (email: string): Promise<boolean> => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    return !mockUsers.some(u => u.email === email && u.id !== user?.id);
+    return !allUsers.some(u => u.email === email && u.id !== user?.id);
   };
 
   return (
