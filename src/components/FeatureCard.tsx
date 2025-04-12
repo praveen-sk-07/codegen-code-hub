@@ -30,9 +30,9 @@ const FeatureCard = ({
       className={`feature-card ${className}`}
       style={{ perspective: '1000px' }}
     >
-      <div className="h-full w-full transform transition-transform duration-500 hover:scale-105">
-        <Link to={to} className="block h-full">
-          <div className="h-full flex flex-col p-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl shadow-md hover:shadow-xl transition-all">
+      <div className="flip-card-inner">
+        <div className="flip-card-front">
+          <div className="h-full flex flex-col p-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl shadow-md">
             <div className="h-14 w-14 bg-codegen-purple/10 dark:bg-codegen-purple/20 rounded-lg flex items-center justify-center mb-4 text-codegen-purple">
               {icon}
             </div>
@@ -40,12 +40,17 @@ const FeatureCard = ({
             <p className="text-gray-600 dark:text-gray-300 mb-4 flex-grow">
               {description}
             </p>
-            <div className="flex items-center text-codegen-purple font-medium group">
-              Explore
-              <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
-            </div>
           </div>
-        </Link>
+        </div>
+        <div className="flip-card-back">
+          <div className="h-full flex flex-col items-center justify-center p-6 bg-gradient-to-br from-codegen-purple/90 to-codegen-blue/90 text-white rounded-xl">
+            <h3 className="text-xl font-semibold mb-4">{title}</h3>
+            <Link to={to} className="px-4 py-2 bg-white text-codegen-purple rounded-lg hover:bg-gray-100 transition-colors flex items-center">
+              Explore
+              <ArrowRight size={18} className="ml-2" />
+            </Link>
+          </div>
+        </div>
       </div>
     </motion.div>
   );

@@ -1,63 +1,100 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BackButton from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Check, Code } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
 
 const practiceQuestions = [
   { 
     id: 'beginners',
     title: 'Beginners Challenge',
-    url: 'https://onecompiler.com/challenges/3w7dby3mt/beginners-coding-challenge'
+    url: 'https://onecompiler.com/challenges/3w7dby3mt/beginners-coding-challenge',
+    points: 10
   },
   { 
     id: 'if-else',
     title: 'If-Else Set 1',
-    url: 'https://onecompiler.com/challenges/3xveaz8es/if-else-set-1' 
+    url: 'https://onecompiler.com/challenges/3xveaz8es/if-else-set-1',
+    points: 15
   },
   { 
     id: 'strings',
     title: 'String Challenge',
-    url: 'https://onecompiler.com/challenges/3w8xvfbtb/strings-challenge' 
+    url: 'https://onecompiler.com/challenges/3w8xvfbtb/strings-challenge',
+    points: 20
   },
   { 
     id: 'loops',
     title: 'Loops 1',
-    url: 'https://onecompiler.com/challenges/3xvgabhq3/loops-1' 
+    url: 'https://onecompiler.com/challenges/3xvgabhq3/loops-1',
+    points: 25
   },
   { 
     id: 'intermediate',
     title: 'Intermediate Challenge',
-    url: 'https://onecompiler.com/challenges/3w9us3eby/intermediate-coding-challenge' 
+    url: 'https://onecompiler.com/challenges/3w9us3eby/intermediate-coding-challenge',
+    points: 30
   },
   { 
     id: 'arrays',
     title: 'Arrays Challenge',
-    url: 'https://onecompiler.com/challenges/3wf8b98k2/arrays-coding-challenge' 
+    url: 'https://onecompiler.com/challenges/3wf8b98k2/arrays-coding-challenge',
+    points: 35
   },
   { 
     id: 'patterns',
     title: 'Pattern Problems',
-    url: 'https://onecompiler.com/challenges/3wkjky7nj/pattern-problems-coding-challenge' 
+    url: 'https://onecompiler.com/challenges/3wkjky7nj/pattern-problems-coding-challenge',
+    points: 40
   },
   { 
     id: 'advanced',
     title: 'Advanced',
-    url: 'https://onecompiler.com/challenges/3ynj6me3n/advanced' 
+    url: 'https://onecompiler.com/challenges/3ynj6me3n/advanced',
+    points: 45
   },
   { 
     id: 'javascript',
     title: 'JavaScript Interview',
-    url: 'https://onecompiler.com/challenges/3zubsy6cd/javascript-interview-questions' 
+    url: 'https://onecompiler.com/challenges/3zubsy6cd/javascript-interview-questions',
+    points: 50
   }
 ];
+
+// Track completed challenges in localStorage
+const getCompletedChallenges = (userId: string): string[] => {
+  const stored = localStorage.getItem(`codegen_completed_${userId}`);
+  return stored ? JSON.parse(stored) : [];
+};
+
+const markChallengeCompleted = (userId: string, challengeId: string) => {
+  const completed = getCompletedChallenges(userId);
+  if (!completed.includes(challengeId)) {
+    completed.push(challengeId);
+    localStorage.setItem(`codegen_completed_${userId}`, JSON.stringify(completed));
+    return true; // Return true if this is a newly completed challenge
+  }
+  return false; // Already completed
+};
 
 const Practice = () => {
   const [activeTab, setActiveTab] = useState('beginners');
   const [isLoading, setIsLoading] = useState(true);
   const [iframeKey, setIframeKey] = useState(Date.now());
+  const { user, incrementProblemsSolved } = useAuth();
+  const { toast } = useToast();
+  const [completedChallenges, setCompletedChallenges] = useState<string[]>([]);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (user) {
+      setCompletedChallenges(getCompletedChallenges(user.id));
+    }
+  }, [user]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -73,7 +110,42 @@ const Practice = () => {
     setIframeKey(Date.now());
   };
 
+  const handleMarkCompleted = () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please login to track your progress",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const challenge = practiceQuestions.find(q => q.id === activeTab);
+    if (!challenge) return;
+
+    const isNewCompletion = markChallengeCompleted(user.id, challenge.id);
+    
+    if (isNewCompletion) {
+      // Update completion state
+      setCompletedChallenges(prev => [...prev, challenge.id]);
+      
+      // Update user profile with points
+      incrementProblemsSolved(challenge.points);
+      
+      toast({
+        title: "Challenge Completed!",
+        description: `You earned ${challenge.points} points for completing ${challenge.title}`,
+      });
+    } else {
+      toast({
+        title: "Already Completed",
+        description: "You've already completed this challenge",
+      });
+    }
+  };
+
   const activeQuestion = practiceQuestions.find(q => q.id === activeTab);
+  const isCompleted = completedChallenges.includes(activeTab);
 
   return (
     <div className="min-h-screen pt-20 pb-10">
@@ -86,14 +158,34 @@ const Practice = () => {
               Strengthen your coding skills with our curated collection of problems
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={handleRefresh}
-          >
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={handleRefresh}
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+            
+            <Button
+              variant={isCompleted ? "outline" : "default"}
+              size="sm"
+              className={`flex items-center gap-2 ${isCompleted ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 'bg-codegen-purple hover:bg-codegen-purple/90'}`}
+              onClick={handleMarkCompleted}
+              disabled={isLoading}
+            >
+              {isCompleted ? (
+                <>
+                  <Check className="h-4 w-4" /> Completed
+                </>
+              ) : (
+                <>
+                  <Code className="h-4 w-4" /> Mark Completed
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         <Tabs 
@@ -106,9 +198,12 @@ const Practice = () => {
               <TabsTrigger 
                 key={question.id} 
                 value={question.id}
-                className="flex-shrink-0"
+                className={`flex-shrink-0 ${completedChallenges.includes(question.id) ? 'text-green-600 dark:text-green-400' : ''}`}
               >
-                {question.title}
+                {question.title} 
+                {completedChallenges.includes(question.id) && (
+                  <Check className="ml-1 h-3 w-3" />
+                )}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -140,6 +235,7 @@ const Practice = () => {
                 className="h-full"
               >
                 <iframe
+                  ref={iframeRef}
                   key={`${question.id}-${iframeKey}`}
                   src={question.url}
                   title={question.title}

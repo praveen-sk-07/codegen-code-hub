@@ -16,6 +16,7 @@ export interface User {
   points: number;
   rank: number;
   downloads: number;
+  lastSyncTimestamp?: number;
 }
 
 // Mock user type for database storage
@@ -33,6 +34,7 @@ interface AuthContextType {
   updateUser: (data: Partial<User>) => void;
   checkUsernameAvailability: (username: string) => Promise<boolean>;
   checkEmailAvailability: (email: string) => Promise<boolean>;
+  incrementProblemsSolved: (points: number) => void;
 }
 
 export interface RegisterData {
@@ -105,6 +107,28 @@ const saveUsers = (users: MockUser[]) => {
   localStorage.setItem('codegen_all_users', JSON.stringify(users));
 };
 
+// Function to save user data to sessionStorage for browser session persistence
+const saveUserToSessionStorage = (user: User) => {
+  sessionStorage.setItem('codegen_current_user', JSON.stringify({
+    ...user,
+    lastSyncTimestamp: Date.now()
+  }));
+};
+
+// Function to get user from sessionStorage
+const getUserFromSessionStorage = (): User | null => {
+  const storedUser = sessionStorage.getItem('codegen_current_user');
+  if (storedUser) {
+    try {
+      return JSON.parse(storedUser);
+    } catch (e) {
+      console.error('Failed to parse stored user data from session:', e);
+      return null;
+    }
+  }
+  return null;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -112,11 +136,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allUsers, setAllUsers] = useState<MockUser[]>(getStoredUsers());
 
   useEffect(() => {
-    // Check for stored user data in localStorage on initial load
-    const storedUser = localStorage.getItem('codegen_user');
-    if (storedUser) {
+    // Check for stored user data in localStorage or sessionStorage on initial load
+    const localStorageUser = localStorage.getItem('codegen_user');
+    const sessionStorageUser = getUserFromSessionStorage();
+
+    // Prioritize session storage for current browser tab
+    if (sessionStorageUser) {
+      setUser(sessionStorageUser);
+    } else if (localStorageUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(localStorageUser);
+        setUser(parsedUser);
+        // Also save to session storage for cross-tab consistency
+        saveUserToSessionStorage(parsedUser);
       } catch (e) {
         console.error('Failed to parse stored user data:', e);
         localStorage.removeItem('codegen_user');
@@ -185,6 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setUser(userWithoutPassword);
     localStorage.setItem('codegen_user', JSON.stringify(userWithoutPassword));
+    saveUserToSessionStorage(userWithoutPassword);
     setIsLoading(false);
     
     toast({
@@ -225,6 +258,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Update state
     setUser(authenticatedUser);
     
+    // Always save to sessionStorage for browser session persistence
+    saveUserToSessionStorage(authenticatedUser);
+    
     // Save to localStorage if rememberMe is enabled
     if (rememberMe) {
       localStorage.setItem('codegen_user', JSON.stringify(authenticatedUser));
@@ -241,6 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('codegen_user');
+    sessionStorage.removeItem('codegen_current_user');
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
@@ -258,7 +295,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     setUser(updatedUser);
+    
+    // Update in both storage locations
     localStorage.setItem('codegen_user', JSON.stringify(updatedUser));
+    saveUserToSessionStorage(updatedUser);
     
     // Also update in users database
     const updatedUsers = allUsers.map(u => {
@@ -274,6 +314,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toast({
       title: "Profile Updated",
       description: "Your profile has been updated successfully",
+    });
+  };
+
+  const incrementProblemsSolved = (points: number) => {
+    if (!user) return;
+    
+    const updatedUser = { 
+      ...user, 
+      problemsSolved: user.problemsSolved + 1,
+      points: user.points + points
+    };
+    
+    // Update rank based on new problem count
+    updatedUser.rank = calculateRank(updatedUser.problemsSolved);
+    
+    setUser(updatedUser);
+    
+    // Update in both storage locations
+    localStorage.setItem('codegen_user', JSON.stringify(updatedUser));
+    saveUserToSessionStorage(updatedUser);
+    
+    // Also update in users database
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        return { 
+          ...u, 
+          problemsSolved: u.problemsSolved + 1,
+          points: u.points + points,
+          rank: calculateRank(u.problemsSolved + 1)
+        };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedUsers);
+    saveUsers(updatedUsers);
+    
+    toast({
+      title: "Problem Completed!",
+      description: `+${points} points added to your profile.`,
     });
   };
 
@@ -300,7 +380,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         updateUser,
         checkUsernameAvailability,
-        checkEmailAvailability
+        checkEmailAvailability,
+        incrementProblemsSolved
       }}
     >
       {children}
