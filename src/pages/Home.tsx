@@ -26,7 +26,7 @@ const Home = () => {
         >
           <div className="flex flex-col items-center text-center max-w-3xl mx-auto">
             <div className="mb-6 p-3 bg-white/10 rounded-full backdrop-blur-sm border border-white/30">
-              <div className="text-white text-2xl font-mono font-bold">{'</>'}</div>
+              <div className="text-white text-2xl font-mono font-bold">{`</>`}</div>
             </div>
             <h1 className="text-4xl md:text-6xl font-bold mb-4">
               CODEGEN
@@ -65,36 +65,70 @@ const Home = () => {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <FeatureCard 
               title="Online Compiler"
               description="Write, run, and debug your code in multiple programming languages directly in your browser."
-              icon={<Terminal className="h-8 w-8" />}
+              icon={<Terminal className="h-6 w-6 text-codegen-purple" />}
               to="/compiler"
               delay={0.1}
             />
             <FeatureCard 
               title="Coding Practice"
               description="Strengthen your skills with our curated collection of coding problems, from beginners to advanced levels."
-              icon={<Book className="h-8 w-8" />}
+              icon={<Book className="h-6 w-6 text-codegen-purple" />}
               to="/practice"
               delay={0.2}
             />
             <FeatureCard 
               title="Interview Preparation"
               description="Get ready for technical interviews with comprehensive resources and practice materials."
-              icon={<MessagesSquare className="h-8 w-8" />}
+              icon={<MessagesSquare className="h-6 w-6 text-codegen-purple" />}
               to="/interview"
               delay={0.3}
             />
             <FeatureCard 
               title="Learning Resources"
               description="Access a rich collection of tutorials, documentation, and external resources to enhance your learning."
-              icon={<BookOpen className="h-8 w-8" />}
+              icon={<BookOpen className="h-6 w-6 text-codegen-purple" />}
               to="/resources"
               delay={0.4}
             />
           </div>
+        </div>
+      </section>
+
+      {/* Acknowledgment Section */}
+      <section className="py-16 bg-white dark:bg-gray-800">
+        <div className="container mx-auto px-4">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            viewport={{ once: true }}
+            className="max-w-4xl mx-auto text-center"
+          >
+            <h2 className="text-3xl font-bold mb-6">Special Acknowledgement</h2>
+            <div className="bg-gradient-to-r from-codegen-blue to-codegen-purple p-0.5 rounded-xl">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6">
+                <p className="text-lg mb-4">
+                  We extend our heartfelt gratitude to
+                </p>
+                <a 
+                  href="https://www.linkedin.com/in/dr-g-fathima-254abb48" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-2xl font-bold text-codegen-purple hover:underline"
+                >
+                  Dr. G. Fathima
+                </a>
+                <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
+                  HOD of CSE Department, for her invaluable guidance as our Mini & Main Project Guide, 
+                  who helped us to develop this project and contribute to our department.
+                </p>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 

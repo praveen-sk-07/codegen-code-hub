@@ -30,10 +30,10 @@ interface AuthContextType {
   checkEmailAvailability: (email: string) => Promise<boolean>;
 }
 
-export interface RegisterData {
+interface RegisterData {
   userType: UserType;
   fullName: string;
-  organization: string;
+  organization?: string;
   username: string;
   email: string;
   password: string;
@@ -92,11 +92,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('User with this email or username already exists');
     }
     
-    // Create new user with fallback for organization
+    // Create new user
     const newUser: User = {
       id: Date.now().toString(),
       fullName: data.fullName,
-      organization: data.organization || '', // Make sure organization is not undefined
+      organization: data.organization,
       username: data.username,
       email: data.email,
       userType: data.userType,
@@ -108,11 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     // Add to mock database
-    mockUsers.push({ 
-      ...newUser, 
-      password: data.password, 
-      profileImage: '' // Make sure profileImage is not undefined
-    });
+    mockUsers.push({ ...newUser, password: data.password });
     
     // Update state and storage
     setUser(newUser);
