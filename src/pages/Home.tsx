@@ -38,10 +38,10 @@ const Home = () => {
               A fully integrated platform for learners and professionals to code, practice, prepare for interviews, and access learning resources.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Button size="lg" asChild className="glow-button bg-white text-codegen-blue hover:bg-white/90">
+              <Button size="lg" asChild className="glow-button bg-white text-codegen-blue hover:bg-white/90 hover:shadow-lg hover:scale-105 transition-all">
                 <Link to="/compiler">Get Started</Link>
               </Button>
-              <Button size="lg" variant="outline" className="glow-button border-white text-white hover:bg-white/10">
+              <Button size="lg" variant="outline" className="glow-button border-white text-white hover:bg-white/10 hover:shadow-lg hover:scale-105 transition-all">
                 <Link to="/resources">Explore Resources</Link>
               </Button>
             </div>
@@ -120,7 +120,7 @@ const Home = () => {
           <div className="flex justify-center">
             <Button 
               size="lg" 
-              className="glow-button bg-codegen-purple hover:bg-codegen-purple/90"
+              className="glow-button bg-codegen-purple hover:bg-codegen-purple/90 hover:shadow-lg hover:scale-105 transition-all"
               onClick={() => setFeedbackDialogOpen(true)}
             >
               <PenTool className="mr-2 h-5 w-5" />
