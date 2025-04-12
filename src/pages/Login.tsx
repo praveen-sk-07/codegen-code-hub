@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -45,6 +46,28 @@ const Login = () => {
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(true);
   const [isEmailAvailable, setIsEmailAvailable] = useState(true);
 
+  // Initialize forms first before using them
+  const loginForm = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      rememberMe: false
+    }
+  });
+
+  const registerForm = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      userType: 'student',
+      fullName: "",
+      organization: "",
+      username: "",
+      email: "",
+      password: ""
+    }
+  });
+
   const PasswordRequirements = ({ password }: { password: string }) => {
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
@@ -79,27 +102,6 @@ const Login = () => {
       navigate('/profile');
     }
   }, [isAuthenticated, navigate]);
-
-  const loginForm = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      rememberMe: false
-    }
-  });
-
-  const registerForm = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      userType: 'student',
-      fullName: "",
-      organization: "",
-      username: "",
-      email: "",
-      password: ""
-    }
-  });
 
   const userType = registerForm.watch('userType');
   const watchUsername = registerForm.watch('username');

@@ -18,6 +18,11 @@ export interface User {
   downloads: number;
 }
 
+// Mock user type for database storage
+interface MockUser extends User {
+  password: string;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -53,7 +58,7 @@ const isStrongPassword = (password: string): boolean => {
 };
 
 // Mock database for demonstration
-const mockUsers = [
+const mockUsers: MockUser[] = [
   {
     id: '1',
     fullName: 'Demo User',
@@ -82,7 +87,7 @@ const calculateRank = (problemsSolved: number): number => {
 };
 
 // Function to get stored users from localStorage
-const getStoredUsers = (): (typeof mockUsers) => {
+const getStoredUsers = (): MockUser[] => {
   const storedUsers = localStorage.getItem('codegen_all_users');
   if (storedUsers) {
     try {
@@ -96,7 +101,7 @@ const getStoredUsers = (): (typeof mockUsers) => {
 };
 
 // Function to save users to localStorage
-const saveUsers = (users: typeof mockUsers) => {
+const saveUsers = (users: MockUser[]) => {
   localStorage.setItem('codegen_all_users', JSON.stringify(users));
 };
 
@@ -104,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [allUsers, setAllUsers] = useState(getStoredUsers());
+  const [allUsers, setAllUsers] = useState<MockUser[]>(getStoredUsers());
 
   useEffect(() => {
     // Check for stored user data in localStorage on initial load
@@ -141,13 +146,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     // Create new user
-    const newUser: User = {
+    const newUser: MockUser = {
       id: Date.now().toString(),
       fullName: data.fullName,
       organization: data.organization,
       username: data.username,
       email: data.email,
       userType: data.userType,
+      password: data.password,
       profileImage: '',
       problemsSolved: 0,
       points: 0,
@@ -156,20 +162,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     // Add to mock database
-    const updatedUsers = [
-      ...allUsers, 
-      { 
-        ...newUser, 
-        password: data.password,
-      }
-    ];
+    const updatedUsers = [...allUsers, newUser];
     
     setAllUsers(updatedUsers);
     saveUsers(updatedUsers);
     
     // Update state and storage
-    setUser(newUser);
-    localStorage.setItem('codegen_user', JSON.stringify(newUser));
+    // We omit the password when storing in state or localStorage
+    const userWithoutPassword: User = {
+      id: newUser.id,
+      fullName: newUser.fullName,
+      organization: newUser.organization,
+      username: newUser.username,
+      email: newUser.email,
+      userType: newUser.userType,
+      profileImage: newUser.profileImage,
+      problemsSolved: newUser.problemsSolved,
+      points: newUser.points,
+      rank: newUser.rank,
+      downloads: newUser.downloads
+    };
+    
+    setUser(userWithoutPassword);
+    localStorage.setItem('codegen_user', JSON.stringify(userWithoutPassword));
     setIsLoading(false);
     
     toast({
