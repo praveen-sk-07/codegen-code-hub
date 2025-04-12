@@ -94,9 +94,10 @@
   transition: all 0.3s ease;
   height: 320px;
   perspective: 1000px;
+  width: 100%;
 }
 
-/* Flip Card Animation */
+/* Flip Card Animation - Enhanced */
 .flip-card-inner {
   position: relative;
   width: 100%;
@@ -123,8 +124,38 @@
 
 .flip-card-front {
   background-color: #fff;
+  z-index: 1;
 }
 
 .flip-card-back {
+  background-color: #9c27b0;
   transform: rotateY(180deg);
+}
+
+/* Enhanced 3D effect */
+.flip-card-inner {
+  transition: transform 1s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.feature-card:hover .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-card-inner {
+    transition: all 0.1s ease;
+  }
+  .feature-card:hover .flip-card-inner {
+    transform: none;
+  }
+  .flip-card-back {
+    transform: none;
+    opacity: 0;
+  }
+  .feature-card:hover .flip-card-front {
+    opacity: 0;
+  }
+  .feature-card:hover .flip-card-back {
+    opacity: 1;
+  }
 }

@@ -1,14 +1,14 @@
-
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  User, Building, BookOpen, Trophy, Download, Edit, Camera, Save, UserRound, Briefcase
+  User, Building, BookOpen, Trophy, Download, Edit, Camera, Save, UserRound, Briefcase, Users
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth, User as UserType, UserType as UserTypeEnum } from '@/contexts/AuthContext';
 import BackButton from '@/components/BackButton';
+import ColleaguesList from '@/components/ColleaguesList';
 import {
   Tabs,
   TabsContent,
@@ -48,7 +48,7 @@ const profileFormSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 const Profile = () => {
-  const { user, updateUser, logout, checkUsernameAvailability, checkEmailAvailability } = useAuth();
+  const { user, updateUser, logout, checkUsernameAvailability, checkEmailAvailability, getUsersFromSameOrganization } = useAuth();
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -56,6 +56,7 @@ const Profile = () => {
   const [profileImage, setProfileImage] = useState<string | undefined>(user?.profileImage);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(true);
   const [isEmailAvailable, setIsEmailAvailable] = useState(true);
+  const [colleagueUsers, setColleagueUsers] = useState<UserType[]>([]);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -106,7 +107,13 @@ const Profile = () => {
     }
   }, [watchEmail, isEditMode, user?.email, checkEmailAvailability]);
 
-  // Mock activity history data
+  React.useEffect(() => {
+    if (selectedTab === 'colleagues' && user?.organization) {
+      const colleagues = getUsersFromSameOrganization();
+      setColleagueUsers(colleagues);
+    }
+  }, [selectedTab, user?.organization, getUsersFromSameOrganization]);
+
   const activityHistory = [
     { id: '1', type: 'problem', name: 'Two Sum', date: '2023-04-05', points: 10 },
     { id: '2', type: 'download', name: 'JavaScript Cheatsheet', date: '2023-04-03', points: 0 },
@@ -134,7 +141,6 @@ const Profile = () => {
     setIsSubmitting(true);
     
     try {
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       updateUser({
@@ -285,6 +291,10 @@ const Profile = () => {
               <TabsList className="mb-6">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="activity">Activity History</TabsTrigger>
+                <TabsTrigger value="colleagues" className="flex items-center gap-1">
+                  <Users className="h-4 w-4" /> 
+                  Colleagues
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="overview">
@@ -490,6 +500,29 @@ const Profile = () => {
                     </div>
                   )}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="colleagues">
+                {user.organization ? (
+                  <ColleaguesList 
+                    users={colleagueUsers} 
+                    organization={user.organization} 
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">Update your profile with your college or organization name to see colleagues</p>
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => {
+                        setIsEditMode(true);
+                        setSelectedTab('overview');
+                      }}
+                    >
+                      Update Profile
+                    </Button>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>

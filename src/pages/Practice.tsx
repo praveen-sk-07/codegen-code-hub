@@ -4,10 +4,11 @@ import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BackButton from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Check, Code } from 'lucide-react';
+import { RefreshCw, Check, Code, Award } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 
+// Practice questions data
 const practiceQuestions = [
   { 
     id: 'beginners',
@@ -89,13 +90,17 @@ const Practice = () => {
   const { toast } = useToast();
   const [completedChallenges, setCompletedChallenges] = useState<string[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [autoMarkEnabled, setAutoMarkEnabled] = useState(false);
+  const executionAttempted = useRef<Record<string, boolean>>({});
 
+  // Load user's completed challenges when component mounts
   useEffect(() => {
     if (user) {
       setCompletedChallenges(getCompletedChallenges(user.id));
     }
   }, [user]);
 
+  // Handle iframe loading
   useEffect(() => {
     setIsLoading(true);
     const timer = setTimeout(() => {
@@ -104,6 +109,45 @@ const Practice = () => {
 
     return () => clearTimeout(timer);
   }, [activeTab, iframeKey]);
+
+  // Monitor iframe execution for auto-completion
+  useEffect(() => {
+    if (!isLoading && iframeRef.current && autoMarkEnabled && user) {
+      const handleMessage = (event: MessageEvent) => {
+        // Check if message is from the compiler iframe
+        if (event.data && event.data.type === 'execution_complete') {
+          // Mark that execution was attempted for this challenge
+          executionAttempted.current = {
+            ...executionAttempted.current,
+            [activeTab]: true
+          };
+          
+          // Wait a bit to check for successful execution
+          setTimeout(() => {
+            const challenge = practiceQuestions.find(q => q.id === activeTab);
+            if (challenge && !completedChallenges.includes(activeTab)) {
+              // Auto-mark as completed
+              const isNewCompletion = markChallengeCompleted(user.id, activeTab);
+              if (isNewCompletion) {
+                setCompletedChallenges(prev => [...prev, activeTab]);
+                incrementProblemsSolved(challenge.points);
+                
+                toast({
+                  title: "Auto Challenge Completed!",
+                  description: `You earned ${challenge.points} points for completing ${challenge.title}`,
+                });
+              }
+            }
+          }, 1000);
+        }
+      };
+      
+      window.addEventListener('message', handleMessage);
+      return () => {
+        window.removeEventListener('message', handleMessage);
+      };
+    }
+  }, [isLoading, activeTab, autoMarkEnabled, user, completedChallenges, incrementProblemsSolved, toast]);
 
   const handleRefresh = () => {
     setIsLoading(true);
@@ -150,15 +194,37 @@ const Practice = () => {
   return (
     <div className="min-h-screen pt-20 pb-10">
       <div className="container mx-auto px-4">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <BackButton to="/" />
-            <h1 className="text-3xl font-bold mb-4">Practice Coding Questions</h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <h1 className="text-3xl font-bold mb-2">Practice Coding Questions</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-2">
               Strengthen your coding skills with our curated collection of problems
             </p>
+            <div className="flex items-center">
+              <span className="text-sm text-gray-500">Completed: {completedChallenges.length}/{practiceQuestions.length}</span>
+              <div className="ml-4 h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-32">
+                <div 
+                  className="h-2 bg-codegen-purple rounded-full" 
+                  style={{ 
+                    width: `${(completedChallenges.length / practiceQuestions.length) * 100}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2">
+          
+          <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => setAutoMarkEnabled(!autoMarkEnabled)}
+            >
+              <Award className={`h-4 w-4 ${autoMarkEnabled ? "text-codegen-purple" : ""}`} />
+              {autoMarkEnabled ? "Auto-mark Enabled" : "Enable Auto-mark"}
+            </Button>
+            
             <Button
               variant="outline"
               size="sm"

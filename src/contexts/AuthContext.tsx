@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -17,6 +16,8 @@ export interface User {
   rank: number;
   downloads: number;
   lastSyncTimestamp?: number;
+  lastLogin?: string; // Track last login time
+  deviceId?: string; // Track device identifier
 }
 
 // Mock user type for database storage
@@ -35,6 +36,7 @@ interface AuthContextType {
   checkUsernameAvailability: (username: string) => Promise<boolean>;
   checkEmailAvailability: (email: string) => Promise<boolean>;
   incrementProblemsSolved: (points: number) => void;
+  getUsersFromSameOrganization: () => MockUser[];
 }
 
 export interface RegisterData {
@@ -57,6 +59,17 @@ const isStrongPassword = (password: string): boolean => {
   const hasMinimumLength = password.length >= 8;
   
   return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar && hasMinimumLength;
+};
+
+// Generate a unique device ID
+const generateDeviceId = (): string => {
+  const existingDeviceId = localStorage.getItem('codegen_device_id');
+  if (existingDeviceId) return existingDeviceId;
+  
+  const newDeviceId = Math.random().toString(36).substring(2, 15) + 
+                     Math.random().toString(36).substring(2, 15);
+  localStorage.setItem('codegen_device_id', newDeviceId);
+  return newDeviceId;
 };
 
 // Mock database for demonstration
@@ -111,7 +124,18 @@ const saveUsers = (users: MockUser[]) => {
 const saveUserToSessionStorage = (user: User) => {
   sessionStorage.setItem('codegen_current_user', JSON.stringify({
     ...user,
-    lastSyncTimestamp: Date.now()
+    lastSyncTimestamp: Date.now(),
+    deviceId: generateDeviceId()
+  }));
+};
+
+// Function to save user data to localStorage for cross-session persistence
+const saveUserToLocalStorage = (user: User) => {
+  localStorage.setItem('codegen_user', JSON.stringify({
+    ...user,
+    lastSyncTimestamp: Date.now(),
+    deviceId: generateDeviceId(),
+    lastLogin: new Date().toISOString()
   }));
 };
 
@@ -129,6 +153,45 @@ const getUserFromSessionStorage = (): User | null => {
   return null;
 };
 
+// Function to get user from localStorage
+const getUserFromLocalStorage = (): User | null => {
+  const storedUser = localStorage.getItem('codegen_user');
+  if (storedUser) {
+    try {
+      return JSON.parse(storedUser);
+    } catch (e) {
+      console.error('Failed to parse stored user data from localStorage:', e);
+      return null;
+    }
+  }
+  return null;
+};
+
+// Function to sync user data across storage options
+const syncUserData = (user: User): User => {
+  const localUser = getUserFromLocalStorage();
+  const sessionUser = getUserFromSessionStorage();
+  
+  // Get the most recent data
+  let mostRecentUser = user;
+  
+  if (localUser && localUser.lastSyncTimestamp && 
+      (!mostRecentUser.lastSyncTimestamp || localUser.lastSyncTimestamp > mostRecentUser.lastSyncTimestamp)) {
+    mostRecentUser = localUser;
+  }
+  
+  if (sessionUser && sessionUser.lastSyncTimestamp && 
+      (!mostRecentUser.lastSyncTimestamp || sessionUser.lastSyncTimestamp > mostRecentUser.lastSyncTimestamp)) {
+    mostRecentUser = sessionUser;
+  }
+  
+  // Update all storage locations with most recent data
+  saveUserToSessionStorage(mostRecentUser);
+  saveUserToLocalStorage(mostRecentUser);
+  
+  return mostRecentUser;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,23 +200,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check for stored user data in localStorage or sessionStorage on initial load
-    const localStorageUser = localStorage.getItem('codegen_user');
+    const localStorageUser = getUserFromLocalStorage();
     const sessionStorageUser = getUserFromSessionStorage();
-
+    
+    let currentUser = null;
+    
     // Prioritize session storage for current browser tab
     if (sessionStorageUser) {
-      setUser(sessionStorageUser);
+      currentUser = sessionStorageUser;
     } else if (localStorageUser) {
-      try {
-        const parsedUser = JSON.parse(localStorageUser);
-        setUser(parsedUser);
-        // Also save to session storage for cross-tab consistency
-        saveUserToSessionStorage(parsedUser);
-      } catch (e) {
-        console.error('Failed to parse stored user data:', e);
-        localStorage.removeItem('codegen_user');
+      currentUser = localStorageUser;
+      // Also save to session storage for cross-tab consistency
+      saveUserToSessionStorage(localStorageUser);
+    }
+    
+    if (currentUser) {
+      // Sync data across storage mechanisms
+      const syncedUser = syncUserData(currentUser);
+      setUser(syncedUser);
+      
+      // Check if we need to update the allUsers array with any updated user data
+      if (syncedUser.id) {
+        const updatedAllUsers = allUsers.map(u => {
+          if (u.id === syncedUser.id) {
+            return { ...u, ...syncedUser, password: u.password }; // Keep password from storage
+          }
+          return u;
+        });
+        setAllUsers(updatedAllUsers);
+        saveUsers(updatedAllUsers);
       }
     }
+    
     setIsLoading(false);
   }, []);
 
@@ -252,7 +330,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       problemsSolved: foundUser.problemsSolved,
       points: foundUser.points,
       rank: foundUser.rank,
-      downloads: foundUser.downloads
+      downloads: foundUser.downloads,
+      deviceId: generateDeviceId(),
+      lastLogin: new Date().toISOString()
     };
     
     // Update state
@@ -261,9 +341,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Always save to sessionStorage for browser session persistence
     saveUserToSessionStorage(authenticatedUser);
     
-    // Save to localStorage if rememberMe is enabled
+    // Save to localStorage if rememberMe is enabled or for cross-device access
+    // We now always save to localStorage to enable cross-device login, but with different persistence
     if (rememberMe) {
-      localStorage.setItem('codegen_user', JSON.stringify(authenticatedUser));
+      // Permanent storage
+      saveUserToLocalStorage(authenticatedUser);
+    } else {
+      // Session-only storage with expiration hint
+      const tempUser = {...authenticatedUser, sessionOnly: true};
+      saveUserToLocalStorage(tempUser);
     }
     
     setIsLoading(false);
@@ -369,6 +455,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return !allUsers.some(u => u.email === email && u.id !== user?.id);
   };
 
+  // New function to get users from the same organization
+  const getUsersFromSameOrganization = (): MockUser[] => {
+    if (!user || !user.organization) return [];
+    
+    return allUsers
+      .filter(u => u.organization === user.organization && u.id !== user.id)
+      .map(u => ({
+        ...u,
+        password: '********' // Mask password for security
+      }));
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -381,7 +479,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateUser,
         checkUsernameAvailability,
         checkEmailAvailability,
-        incrementProblemsSolved
+        incrementProblemsSolved,
+        getUsersFromSameOrganization
       }}
     >
       {children}

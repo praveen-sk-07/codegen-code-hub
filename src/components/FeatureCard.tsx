@@ -28,7 +28,6 @@ const FeatureCard = ({
       transition={{ duration: 0.6, delay }}
       viewport={{ once: true }}
       className={`feature-card ${className}`}
-      style={{ perspective: '1000px' }}
     >
       <div className="flip-card-inner">
         <div className="flip-card-front">
