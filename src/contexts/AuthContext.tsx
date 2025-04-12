@@ -7,11 +7,11 @@ export type UserType = 'student' | 'professional';
 export interface User {
   id: string;
   fullName: string;
-  organization: string; // Changed from optional to required
+  organization?: string;
   username: string;
   email: string;
   userType: UserType;
-  profileImage: string; // Changed from optional to required
+  profileImage?: string;
   problemsSolved: number;
   points: number;
   rank: number;
@@ -92,11 +92,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('User with this email or username already exists');
     }
     
-    // Create new user with organization and profileImage always set
+    // Create new user with fallback for organization
     const newUser: User = {
       id: Date.now().toString(),
       fullName: data.fullName,
-      organization: data.organization || 'N/A', // Default value if empty
+      organization: data.organization || '', // Make sure organization is not undefined
       username: data.username,
       email: data.email,
       userType: data.userType,
@@ -110,7 +110,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Add to mock database
     mockUsers.push({ 
       ...newUser, 
-      password: data.password
+      password: data.password, 
+      profileImage: '' // Make sure profileImage is not undefined
     });
     
     // Update state and storage

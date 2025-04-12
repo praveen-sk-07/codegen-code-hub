@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import BackButton from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react'; // Added import
+import { RefreshCw } from 'lucide-react';
 
 const Interview = () => {
   const [isLoading, setIsLoading] = useState(true);
