@@ -27,22 +27,26 @@ const FeatureCard = ({
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay }}
       viewport={{ once: true }}
+      whileHover={{ 
+        y: -10, 
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+      }}
       className={`feature-card ${className}`}
     >
-      <div className="h-full flex flex-col p-4">
-        <div className="h-12 w-12 bg-codegen-purple/10 rounded-lg flex items-center justify-center mb-3">
+      <div className="h-full flex flex-col p-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl">
+        <div className="h-14 w-14 bg-codegen-purple/10 dark:bg-codegen-purple/20 rounded-lg flex items-center justify-center mb-4 text-codegen-purple">
           {icon}
         </div>
-        <h3 className="text-lg font-semibold mb-1">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-300 mb-3 flex-grow text-sm">
+        <h3 className="text-xl font-semibold mb-2 text-gray-800 dark:text-white">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-300 mb-4 flex-grow">
           {description}
         </p>
         <Link
           to={to}
-          className="flex items-center text-codegen-purple font-medium hover:underline transition-all text-sm"
+          className="group flex items-center text-codegen-purple font-medium hover:underline transition-all"
         >
           Explore
-          <ArrowRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
+          <ArrowRight size={18} className="ml-2 group-hover:translate-x-2 transition-transform duration-300" />
         </Link>
       </div>
     </motion.div>

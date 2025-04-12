@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -14,7 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/components/ui/use-toast';
 import { Eye, EyeOff, Mail, Lock, User, Building, UserRound, Briefcase, Code } from 'lucide-react';
 import BackButton from '@/components/BackButton';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, RegisterData } from '@/contexts/AuthContext';
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -121,6 +120,10 @@ const Login = () => {
     
     try {
       await login(data.email, data.password, data.rememberMe || false);
+      toast({
+        title: "Login Successful",
+        description: "Welcome back to CODEGEN!",
+      });
       navigate('/profile');
     } catch (error) {
       toast({
@@ -141,7 +144,22 @@ const Login = () => {
     setIsSubmitting(true);
     
     try {
-      await register(data);
+      const registerData: RegisterData = {
+        userType: data.userType,
+        fullName: data.fullName,
+        organization: data.organization,
+        username: data.username,
+        email: data.email,
+        password: data.password
+      };
+      
+      await register(registerData);
+      
+      toast({
+        title: "Registration Successful",
+        description: "Your CODEGEN account has been created successfully!",
+      });
+      
       navigate('/profile');
     } catch (error) {
       toast({
