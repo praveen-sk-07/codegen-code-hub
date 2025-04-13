@@ -10,12 +10,22 @@ interface AuthGuardProps {
 }
 
 const AuthGuard = ({ children }: AuthGuardProps) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, validateSession, refreshUserSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
+    // Validate the current session token
+    const isSessionValid = validateSession();
+    
+    // If session validation fails but user is still considered authenticated,
+    // try to refresh the session token
+    if (!isSessionValid && isAuthenticated) {
+      refreshUserSession();
+    }
+    
+    // If still not authenticated after validation, redirect to login
     if (!isLoading && !isAuthenticated) {
       toast({
         title: "Authentication Required",
@@ -24,7 +34,16 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
       });
       navigate('/login', { state: { from: location.pathname } });
     }
-  }, [isAuthenticated, isLoading, navigate, location.pathname, toast]);
+    
+    // Set up periodic session validation
+    const intervalId = setInterval(() => {
+      if (!validateSession() && isAuthenticated) {
+        refreshUserSession();
+      }
+    }, 300000); // Check every 5 minutes
+    
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, isLoading, navigate, location.pathname, toast, validateSession, refreshUserSession]);
 
   if (isLoading) {
     return (

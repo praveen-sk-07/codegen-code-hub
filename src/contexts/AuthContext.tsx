@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -18,11 +19,14 @@ export interface User {
   lastSyncTimestamp?: number;
   lastLogin?: string; // Track last login time
   deviceId?: string; // Track device identifier
+  sessionToken?: string; // JWT-like token for session validation
+  tokenExpiry?: number; // Token expiration timestamp
 }
 
 // Mock user type for database storage
 interface MockUser extends User {
   password: string;
+  refreshToken?: string; // For token refresh mechanism
 }
 
 interface AuthContextType {
@@ -37,6 +41,8 @@ interface AuthContextType {
   checkEmailAvailability: (email: string) => Promise<boolean>;
   incrementProblemsSolved: (points: number) => void;
   getUsersFromSameOrganization: () => MockUser[];
+  validateSession: () => boolean; // New function to validate session
+  refreshUserSession: () => void; // New function to refresh user session
 }
 
 export interface RegisterData {
@@ -72,7 +78,34 @@ const generateDeviceId = (): string => {
   return newDeviceId;
 };
 
-// Initial mock users - removed demo user
+// Generate a JWT-like token (simulated for frontend only)
+const generateToken = (userId: string): { token: string, expiry: number } => {
+  const now = Date.now();
+  const expiryTime = now + (7 * 24 * 60 * 60 * 1000); // 7 days from now
+  
+  // In a real app, this would be a proper JWT signed by a server
+  const payload = {
+    userId,
+    deviceId: generateDeviceId(),
+    issuedAt: now,
+    expiresAt: expiryTime
+  };
+  
+  const token = btoa(JSON.stringify(payload)); // Base64 encoding (simulated JWT)
+  return { token, expiry: expiryTime };
+};
+
+// Validate token 
+const validateToken = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token));
+    return payload.expiresAt > Date.now();
+  } catch (e) {
+    return false;
+  }
+};
+
+// Initial mock users
 const initialMockUsers: MockUser[] = [];
 
 // Function to calculate rank based on problems solved
@@ -143,7 +176,19 @@ const getUserFromLocalStorage = (): User | null => {
   const storedUser = localStorage.getItem('codegen_user');
   if (storedUser) {
     try {
-      return JSON.parse(storedUser);
+      const user = JSON.parse(storedUser);
+      
+      // Check if token has expired (if it exists)
+      if (user.sessionToken && user.tokenExpiry) {
+        if (user.tokenExpiry < Date.now()) {
+          // Token expired, clear from localStorage
+          localStorage.removeItem('codegen_user');
+          sessionStorage.removeItem('codegen_current_user');
+          return null;
+        }
+      }
+      
+      return user;
     } catch (e) {
       console.error('Failed to parse stored user data from localStorage:', e);
       return null;
@@ -152,7 +197,7 @@ const getUserFromLocalStorage = (): User | null => {
   return null;
 };
 
-// Function to sync user data across storage options
+// Sync user data across storage and devices
 const syncUserData = (user: User): User => {
   const localUser = getUserFromLocalStorage();
   const sessionUser = getUserFromSessionStorage();
@@ -183,6 +228,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
   const [allUsers, setAllUsers] = useState<MockUser[]>(getStoredUsers());
 
+  // Session validation function
+  const validateSession = (): boolean => {
+    const localUser = getUserFromLocalStorage();
+    
+    if (!localUser) return false;
+    
+    // Check if token exists and is valid
+    if (localUser.sessionToken) {
+      return validateToken(localUser.sessionToken);
+    }
+    
+    return false;
+  };
+  
+  // Session refresh function
+  const refreshUserSession = () => {
+    if (!user || !user.id) return;
+    
+    // Generate new token
+    const { token, expiry } = generateToken(user.id);
+    
+    // Update user with new token
+    const updatedUser = { 
+      ...user, 
+      sessionToken: token,
+      tokenExpiry: expiry,
+      lastSyncTimestamp: Date.now()
+    };
+    
+    setUser(updatedUser);
+    saveUserToSessionStorage(updatedUser);
+    saveUserToLocalStorage(updatedUser);
+    
+    // Update in all users collection
+    const updatedAllUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        return { ...u, sessionToken: token, tokenExpiry: expiry };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedAllUsers);
+    saveUsers(updatedAllUsers);
+  };
+
   useEffect(() => {
     // Check for stored user data in localStorage or sessionStorage on initial load
     const localStorageUser = getUserFromLocalStorage();
@@ -200,6 +290,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     if (currentUser) {
+      // Validate session token if it exists
+      if (currentUser.sessionToken) {
+        const isValid = validateToken(currentUser.sessionToken);
+        if (!isValid) {
+          // Token is invalid or expired
+          localStorage.removeItem('codegen_user');
+          sessionStorage.removeItem('codegen_current_user');
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
       // Sync data across storage mechanisms
       const syncedUser = syncUserData(currentUser);
       setUser(syncedUser);
@@ -218,6 +321,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     setIsLoading(false);
+    
+    // Set up periodic token validation
+    const intervalId = setInterval(() => {
+      if (user && user.sessionToken) {
+        const isValid = validateToken(user.sessionToken);
+        if (!isValid) {
+          // Token has expired, refresh it
+          refreshUserSession();
+        }
+      }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   const register = async (data: RegisterData): Promise<void> => {
@@ -240,9 +356,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
     }
     
+    // Generate unique ID
+    const userId = Date.now().toString();
+    
+    // Generate authentication token
+    const { token, expiry } = generateToken(userId);
+    
     // Create new user
     const newUser: MockUser = {
-      id: Date.now().toString(),
+      id: userId,
       fullName: data.fullName,
       organization: data.organization,
       username: data.username,
@@ -253,7 +375,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       problemsSolved: 0,
       points: 0,
       rank: 7, // Default rank
-      downloads: 0
+      downloads: 0,
+      sessionToken: token,
+      tokenExpiry: expiry,
+      deviceId: generateDeviceId(),
+      lastLogin: new Date().toISOString(),
+      lastSyncTimestamp: Date.now()
     };
     
     // Add to mock database
@@ -275,11 +402,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       problemsSolved: newUser.problemsSolved,
       points: newUser.points,
       rank: newUser.rank,
-      downloads: newUser.downloads
+      downloads: newUser.downloads,
+      sessionToken: token,
+      tokenExpiry: expiry,
+      deviceId: generateDeviceId(),
+      lastLogin: new Date().toISOString(),
+      lastSyncTimestamp: Date.now()
     };
     
     setUser(userWithoutPassword);
-    localStorage.setItem('codegen_user', JSON.stringify(userWithoutPassword));
+    saveUserToLocalStorage(userWithoutPassword);
     saveUserToSessionStorage(userWithoutPassword);
     setIsLoading(false);
     
@@ -303,6 +435,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Invalid email or password');
     }
     
+    // Generate new authentication token
+    const { token, expiry } = generateToken(foundUser.id);
+    
     // Create user object (without password)
     const authenticatedUser: User = {
       id: foundUser.id,
@@ -317,7 +452,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       rank: foundUser.rank,
       downloads: foundUser.downloads,
       deviceId: generateDeviceId(),
-      lastLogin: new Date().toISOString()
+      lastLogin: new Date().toISOString(),
+      sessionToken: token,
+      tokenExpiry: expiry,
+      lastSyncTimestamp: Date.now()
     };
     
     // Update state
@@ -337,6 +475,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveUserToLocalStorage(tempUser);
     }
     
+    // Update the user's session token in the database
+    const updatedAllUsers = allUsers.map(u => {
+      if (u.id === foundUser.id) {
+        return { ...u, sessionToken: token, tokenExpiry: expiry, lastLogin: new Date().toISOString() };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedAllUsers);
+    saveUsers(updatedAllUsers);
+    
     setIsLoading(false);
     
     toast({
@@ -346,9 +495,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    // If user exists, invalidate their token in the database
+    if (user && user.id) {
+      const updatedAllUsers = allUsers.map(u => {
+        if (u.id === user.id) {
+          // Remove token from database record
+          const { sessionToken, tokenExpiry, ...rest } = u;
+          return rest;
+        }
+        return u;
+      });
+      
+      setAllUsers(updatedAllUsers);
+      saveUsers(updatedAllUsers);
+    }
+    
     setUser(null);
     localStorage.removeItem('codegen_user');
     sessionStorage.removeItem('codegen_current_user');
+    
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
@@ -368,7 +533,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(updatedUser);
     
     // Update in both storage locations
-    localStorage.setItem('codegen_user', JSON.stringify(updatedUser));
+    saveUserToLocalStorage(updatedUser);
     saveUserToSessionStorage(updatedUser);
     
     // Also update in users database
@@ -403,7 +568,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(updatedUser);
     
     // Update in both storage locations
-    localStorage.setItem('codegen_user', JSON.stringify(updatedUser));
+    saveUserToLocalStorage(updatedUser);
     saveUserToSessionStorage(updatedUser);
     
     // Also update in users database
@@ -469,7 +634,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         checkUsernameAvailability,
         checkEmailAvailability,
         incrementProblemsSolved,
-        getUsersFromSameOrganization
+        getUsersFromSameOrganization,
+        validateSession,
+        refreshUserSession
       }}
     >
       {children}
