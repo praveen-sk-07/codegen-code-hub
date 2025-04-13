@@ -72,23 +72,8 @@ const generateDeviceId = (): string => {
   return newDeviceId;
 };
 
-// Mock database for demonstration
-const mockUsers: MockUser[] = [
-  {
-    id: '1',
-    fullName: 'Demo User',
-    organization: 'Adhiyamaan College of Engineering',
-    username: 'demouser',
-    email: 'demo@example.com',
-    password: 'Password@123',
-    userType: 'student' as UserType,
-    profileImage: '',
-    problemsSolved: 45,
-    points: 325,
-    rank: 12,
-    downloads: 8
-  }
-];
+// Initial mock users - removed demo user
+const initialMockUsers: MockUser[] = [];
 
 // Function to calculate rank based on problems solved
 const calculateRank = (problemsSolved: number): number => {
@@ -109,10 +94,10 @@ const getStoredUsers = (): MockUser[] => {
       return JSON.parse(storedUsers);
     } catch (e) {
       console.error('Failed to parse stored users data:', e);
-      return mockUsers;
+      return initialMockUsers;
     }
   }
-  return mockUsers;
+  return initialMockUsers;
 };
 
 // Function to save users to localStorage
@@ -455,12 +440,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return !allUsers.some(u => u.email === email && u.id !== user?.id);
   };
 
-  // New function to get users from the same organization
+  // Function to get users from the same organization, excluding the current user and demo user
   const getUsersFromSameOrganization = (): MockUser[] => {
     if (!user || !user.organization) return [];
     
     return allUsers
-      .filter(u => u.organization === user.organization && u.id !== user.id)
+      .filter(u => 
+        u.organization === user.organization && 
+        u.id !== user.id && 
+        u.email !== 'demo@example.com'
+      )
       .map(u => ({
         ...u,
         password: '********' // Mask password for security

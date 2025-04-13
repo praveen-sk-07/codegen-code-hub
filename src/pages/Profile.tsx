@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   User, Building, BookOpen, Trophy, Download, Edit, Camera, Save, UserRound, Briefcase, Users
@@ -73,6 +73,34 @@ const Profile = () => {
   const watchUsername = form.watch('username');
   const watchEmail = form.watch('email');
 
+  useEffect(() => {
+    if (user) {
+      form.reset({
+        fullName: user.fullName,
+        organization: user.organization,
+        username: user.username,
+        email: user.email,
+        userType: user.userType,
+      });
+      setProfileImage(user.profileImage);
+    }
+  }, [user, form]);
+
+  useEffect(() => {
+    const fetchColleagues = () => {
+      if (selectedTab === 'colleagues' && user?.organization) {
+        const colleagues = getUsersFromSameOrganization();
+        setColleagueUsers(colleagues);
+      }
+    };
+
+    fetchColleagues();
+    
+    const intervalId = setInterval(fetchColleagues, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, [selectedTab, user?.organization, getUsersFromSameOrganization]);
+
   React.useEffect(() => {
     if (isEditMode && watchUsername !== user?.username) {
       const checkUsername = async () => {
@@ -106,13 +134,6 @@ const Profile = () => {
       return () => clearTimeout(timer);
     }
   }, [watchEmail, isEditMode, user?.email, checkEmailAvailability]);
-
-  React.useEffect(() => {
-    if (selectedTab === 'colleagues' && user?.organization) {
-      const colleagues = getUsersFromSameOrganization();
-      setColleagueUsers(colleagues);
-    }
-  }, [selectedTab, user?.organization, getUsersFromSameOrganization]);
 
   const activityHistory = [
     { id: '1', type: 'problem', name: 'Two Sum', date: '2023-04-05', points: 10 },

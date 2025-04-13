@@ -17,7 +17,10 @@ interface ColleaguesListProps {
 }
 
 const ColleaguesList = ({ users, organization }: ColleaguesListProps) => {
-  if (users.length === 0) {
+  // Filter out the demo user with email demo@example.com
+  const filteredUsers = users.filter(user => user.email !== 'demo@example.com');
+  
+  if (filteredUsers.length === 0) {
     return (
       <div className="text-center p-8 text-gray-500">
         <p>No one else from {organization} has registered yet.</p>
@@ -30,11 +33,11 @@ const ColleaguesList = ({ users, organization }: ColleaguesListProps) => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">People from {organization}</h3>
-        <span className="text-sm text-gray-500">{users.length} users</span>
+        <span className="text-sm text-gray-500">{filteredUsers.length} users</span>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {users.map((user) => (
+        {filteredUsers.map((user) => (
           <Card key={user.id} className="overflow-hidden">
             <CardContent className="p-4">
               <div className="flex items-center gap-4">
