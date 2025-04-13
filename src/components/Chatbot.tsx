@@ -1,11 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, Send, X, Bot } from 'lucide-react';
+import { MessageCircle, Send, X, Bot, ThumbsUp, ThumbsDown, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/components/ui/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useForm } from '@formspree/react';
 
 interface Message {
   id: number;
@@ -13,6 +15,71 @@ interface Message {
   sender: 'user' | 'bot';
   timestamp: Date;
 }
+
+interface FeedbackDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  chatMessage: string;
+}
+
+const FeedbackDialog = ({ isOpen, onClose, chatMessage }: FeedbackDialogProps) => {
+  const [formState, handleSubmit] = useForm("xeoanvav");
+  const { toast } = useToast();
+  const [feedback, setFeedback] = useState("");
+  
+  const submitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSubmit({
+      message: `Feedback for: "${chatMessage}"\n\nUser feedback: ${feedback}`,
+    });
+    
+    if (!formState.errors) {
+      toast({
+        title: "Thank you for your feedback!",
+        description: "Your input helps us improve our chat assistant.",
+      });
+      setFeedback("");
+      onClose();
+    }
+  };
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>How can we improve this answer?</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submitFeedback} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Original answer:</label>
+            <div className="bg-muted p-3 rounded-md text-sm">{chatMessage}</div>
+          </div>
+          <div>
+            <label htmlFor="feedback" className="text-sm font-medium mb-1 block">
+              Your feedback:
+            </label>
+            <Textarea
+              id="feedback"
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Tell us how we can improve this response..."
+              className="w-full"
+              rows={4}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={formState.submitting || !feedback.trim()}>
+              {formState.submitting ? "Sending..." : "Submit Feedback"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const initialMessages: Message[] = [
   {
@@ -39,7 +106,10 @@ const Chatbot = () => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [currentFeedbackMessage, setCurrentFeedbackMessage] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -63,31 +133,21 @@ const Chatbot = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    // Simulate bot response with typing delay
-    setTimeout(() => {
-      let botResponse = "I'm not sure how to help with that. Could you try asking something related to coding or the CODEGEN platform?";
+    // Attempt to fetch response from codegen-helpdesk
+    fetch('https://codegen-helpdesk.created.app/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        message: inputMessage,
+      }),
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Use the AI response if available
+      const botResponse = data?.response || fallbackResponse(inputMessage);
       
-      // Check for predefined answers
-      const lowercaseInput = inputMessage.toLowerCase();
-      
-      // Try to match input with sample responses
-      for (const [key, value] of Object.entries(sampleResponses)) {
-        if (lowercaseInput.includes(key)) {
-          botResponse = value;
-          break;
-        }
-      }
-      
-      // Special cases for greetings
-      if (lowercaseInput.match(/^(hi|hello|hey|greetings)/i)) {
-        botResponse = "Hello! How can I assist you with coding or using the CODEGEN platform today?";
-      }
-      
-      // Special case for thank you
-      if (lowercaseInput.match(/thank you|thanks/i)) {
-        botResponse = "You're welcome! If you have more questions, feel free to ask anytime.";
-      }
-
       const botMessage: Message = {
         id: messages.length + 2,
         content: botResponse,
@@ -96,8 +156,49 @@ const Chatbot = () => {
       };
 
       setMessages(prev => [...prev, botMessage]);
+    })
+    .catch(error => {
+      console.error('Error fetching from helpdesk:', error);
+      // Fall back to local responses
+      const botMessage: Message = {
+        id: messages.length + 2,
+        content: fallbackResponse(inputMessage),
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+    })
+    .finally(() => {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
+    });
+  };
+
+  const fallbackResponse = (userInput: string) => {
+    let botResponse = "I'm not sure how to help with that. Could you try asking something related to coding or the CODEGEN platform?";
+      
+    // Check for predefined answers
+    const lowercaseInput = userInput.toLowerCase();
+    
+    // Try to match input with sample responses
+    for (const [key, value] of Object.entries(sampleResponses)) {
+      if (lowercaseInput.includes(key)) {
+        botResponse = value;
+        break;
+      }
+    }
+    
+    // Special cases for greetings
+    if (lowercaseInput.match(/^(hi|hello|hey|greetings)/i)) {
+      botResponse = "Hello! How can I assist you with coding or using the CODEGEN platform today?";
+    }
+    
+    // Special case for thank you
+    if (lowercaseInput.match(/thank you|thanks/i)) {
+      botResponse = "You're welcome! If you have more questions, feel free to ask anytime.";
+    }
+
+    return botResponse;
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -105,6 +206,29 @@ const Chatbot = () => {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const openFeedbackDialog = (message: string) => {
+    setCurrentFeedbackMessage(message);
+    setFeedbackDialogOpen(true);
+  };
+
+  const handleFeedback = (isHelpful: boolean, messageContent: string) => {
+    toast({
+      title: isHelpful ? "Thanks for the feedback!" : "We'll improve our answers",
+      description: isHelpful 
+        ? "We're glad you found this helpful." 
+        : "Would you like to tell us how we can improve?",
+      action: !isHelpful ? (
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => openFeedbackDialog(messageContent)}
+        >
+          Give Feedback
+        </Button>
+      ) : undefined,
+    });
   };
 
   return (
@@ -157,9 +281,35 @@ const Chatbot = () => {
                       }`}
                     >
                       <p className="text-sm">{message.content}</p>
-                      <p className="text-[10px] mt-1 opacity-70">
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <div className="flex justify-between items-center mt-1">
+                        <p className="text-[10px] opacity-70">
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        
+                        {/* Feedback buttons for bot messages */}
+                        {message.sender === 'bot' && (
+                          <div className="flex space-x-1">
+                            <button 
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full"
+                              onClick={() => handleFeedback(true, message.content)}
+                            >
+                              <ThumbsUp size={12} className="text-gray-500 dark:text-gray-400" />
+                            </button>
+                            <button 
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full"
+                              onClick={() => handleFeedback(false, message.content)}
+                            >
+                              <ThumbsDown size={12} className="text-gray-500 dark:text-gray-400" />
+                            </button>
+                            <button 
+                              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full"
+                              onClick={() => openFeedbackDialog(message.content)}
+                            >
+                              <HelpCircle size={12} className="text-gray-500 dark:text-gray-400" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -199,6 +349,13 @@ const Chatbot = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Feedback Dialog */}
+      <FeedbackDialog 
+        isOpen={feedbackDialogOpen} 
+        onClose={() => setFeedbackDialogOpen(false)} 
+        chatMessage={currentFeedbackMessage} 
+      />
     </>
   );
 };

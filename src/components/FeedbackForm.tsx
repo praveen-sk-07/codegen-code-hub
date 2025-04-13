@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import React from 'react';
+import { useForm, ValidationError } from '@formspree/react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from "@/components/ui/use-toast";
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, X } from 'lucide-react';
+import { Send, X, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters long" }),
@@ -26,8 +26,10 @@ interface FeedbackFormProps {
 }
 
 const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  
+  // Use Formspree's hook
+  const [formspreeState, handleFormspreeSubmit] = useForm("xeoanvav");
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -40,31 +42,25 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
   });
   
   const onSubmit = async (data: FormValues) => {
-    setIsSubmitting(true);
-    
     try {
-      // In a real implementation, you would send this data to your backend
-      // For now, we'll simulate a server request
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Send the form data to Formspree
+      await handleFormspreeSubmit({
+        name: data.name,
+        email: data.email,
+        category: data.category,
+        message: data.message,
+      });
       
-      const emailBody = `
-        Name: ${data.name}
-        Email: ${data.email}
-        Category: ${data.category}
-        Message: ${data.message}
-      `;
-      
-      // For demo purposes, let's log what would be sent
-      console.log("Sending email to: eccodeyyy0203@gmail.com");
-      console.log("Email content:", emailBody);
-      
+      // Display success message
       toast({
         title: "Feedback Submitted",
         description: "Thank you for your feedback! We'll get back to you soon.",
       });
       
+      // Reset the form
       form.reset();
       
+      // Close the dialog if onClose is provided
       if (onClose) {
         onClose();
       }
@@ -74,8 +70,6 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
         description: "There was a problem submitting your feedback. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
   
@@ -121,6 +115,7 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
                     <Input type="email" placeholder="Your email address" {...field} />
                   </FormControl>
                   <FormMessage />
+                  <ValidationError prefix="Email" field="email" errors={formspreeState.errors} />
                 </FormItem>
               )}
             />
@@ -164,15 +159,20 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
                     />
                   </FormControl>
                   <FormMessage />
+                  <ValidationError prefix="Message" field="message" errors={formspreeState.errors} />
                 </FormItem>
               )}
             />
             
             <CardFooter className="px-0 pt-2">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={formspreeState.submitting}
+              >
+                {formspreeState.submitting ? (
                   <span className="flex items-center">
-                    <span className="animate-spin mr-2">◌</span> Submitting...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
                   </span>
                 ) : (
                   <span className="flex items-center">
