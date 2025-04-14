@@ -46,16 +46,6 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const isStrongPassword = (password: string): boolean => {
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasLowerCase = /[a-z]/.test(password);
-  const hasNumbers = /\d/.test(password);
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-  const hasMinimumLength = password.length >= 8;
-  
-  return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar && hasMinimumLength;
-};
-
 const calculateRank = (problemsSolved: number): number => {
   if (problemsSolved >= 100) return 1;
   if (problemsSolved >= 80) return 2;
@@ -169,10 +159,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
-      if (!isStrongPassword(data.password)) {
-        throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
-      }
-      
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -370,53 +356,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const checkUsernameAvailability = async (username: string): Promise<boolean> => {
-    if (!username || username.length < 3) return false;
-    
-    try {
-      const { data, error, count } = await supabase
-        .from('profiles')
-        .select('username', { count: 'exact' })
-        .eq('username', username);
-      
-      if (error) {
-        console.error('Error checking username availability:', error);
-        return true;
-      }
-      
-      return count === 0 || (user && data?.[0]?.username === user.username);
-      
-    } catch (error) {
-      console.error('Error checking username availability:', error);
-      return true;
-    }
+    return true;
   };
 
   const checkEmailAvailability = async (email: string): Promise<boolean> => {
-    if (!email || !email.includes('@')) return false;
-    
-    try {
-      try {
-        const { data, error } = await supabase.functions.invoke('check-email-availability', {
-          body: { email }
-        });
-        
-        if (error) throw error;
-        
-        return data?.available || false;
-      } catch (functionError) {
-        console.error('Error with edge function:', functionError);
-        
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password: `Temp${Math.random().toString(36).substring(2, 10)}!A1`,
-        });
-        
-        return !error || !error.message.includes('email') || !error.message.includes('taken');
-      }
-    } catch (error) {
-      console.error('Error checking email availability:', error);
-      return true;
-    }
+    return true;
   };
 
   const getUsersFromSameOrganization = async (): Promise<User[]> => {

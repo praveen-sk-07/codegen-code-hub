@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useForm } from '@formspree/react';
 import FeedbackForm from './FeedbackForm';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 interface Message {
   id: number;
@@ -104,6 +104,8 @@ const getFallbackResponse = (query: string) => {
   return fallbackResponses[index];
 };
 
+const API_ENDPOINT = 'https://codegen-helpdesk.created.app';
+
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -131,7 +133,7 @@ const Chatbot = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch('https://codegen-helpdesk.created.app/api/status', {
+      const response = await fetch(`${API_ENDPOINT}/api/status`, {
         method: 'GET',
         signal: controller.signal
       });
@@ -172,7 +174,7 @@ const Chatbot = () => {
       return;
     }
 
-    fetch('https://codegen-helpdesk.created.app/api/chat', {
+    fetch(`${API_ENDPOINT}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

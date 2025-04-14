@@ -40,13 +40,8 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, login, isAuthenticated, checkUsernameAvailability, checkEmailAvailability } = useAuth();
+  const { register, login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  
-  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-  
-  const [validationMode] = useState<'realtime' | 'onsubmit'>('onsubmit');
 
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
