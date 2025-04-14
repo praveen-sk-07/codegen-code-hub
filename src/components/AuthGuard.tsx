@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -17,39 +16,33 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      const isSessionValid = await validateSession();
-      
-      // If session validation fails but user is still considered authenticated,
-      // try to refresh the session token
-      if (!isSessionValid && isAuthenticated) {
-        await refreshUserSession();
-      }
-      
-      // If still not authenticated after validation, redirect to login
-      if (!isLoading && !isAuthenticated) {
-        toast({
-          title: "Authentication Required",
-          description: "Please login or register to access this feature",
-          variant: "default",
-        });
-        navigate('/login', { state: { from: location.pathname } });
-      }
-    };
+    // Validate the current session token
+    const isSessionValid = validateSession();
     
-    checkAuthStatus();
+    // If session validation fails but user is still considered authenticated,
+    // try to refresh the session token
+    if (!isSessionValid && isAuthenticated) {
+      refreshUserSession();
+    }
     
-    // Set up Supabase auth listener for real-time session changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // Check for session end events
-      if (event === 'SIGNED_OUT') {
-        navigate('/login');
+    // If still not authenticated after validation, redirect to login
+    if (!isLoading && !isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please login or register to access this feature",
+        variant: "default",
+      });
+      navigate('/login', { state: { from: location.pathname } });
+    }
+    
+    // Set up periodic session validation
+    const intervalId = setInterval(() => {
+      if (!validateSession() && isAuthenticated) {
+        refreshUserSession();
       }
-    });
+    }, 300000); // Check every 5 minutes
     
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => clearInterval(intervalId);
   }, [isAuthenticated, isLoading, navigate, location.pathname, toast, validateSession, refreshUserSession]);
 
   if (isLoading) {

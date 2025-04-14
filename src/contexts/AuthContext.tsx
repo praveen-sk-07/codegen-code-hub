@@ -1,7 +1,6 @@
+
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/supabase';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 export type UserType = 'student' | 'professional';
 
@@ -17,6 +16,17 @@ export interface User {
   points: number;
   rank: number;
   downloads: number;
+  lastSyncTimestamp?: number;
+  lastLogin?: string; // Track last login time
+  deviceId?: string; // Track device identifier
+  sessionToken?: string; // JWT-like token for session validation
+  tokenExpiry?: number; // Token expiration timestamp
+}
+
+// Mock user type for database storage
+interface MockUser extends User {
+  password: string;
+  refreshToken?: string; // For token refresh mechanism
 }
 
 interface AuthContextType {
@@ -25,14 +35,14 @@ interface AuthContextType {
   isLoading: boolean;
   register: (data: RegisterData) => Promise<void>;
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUser: (data: Partial<User>) => Promise<void>;
+  logout: () => void;
+  updateUser: (data: Partial<User>) => void;
   checkUsernameAvailability: (username: string) => Promise<boolean>;
   checkEmailAvailability: (email: string) => Promise<boolean>;
-  incrementProblemsSolved: (points: number) => Promise<void>;
-  getUsersFromSameOrganization: () => Promise<User[]>;
-  validateSession: () => Promise<boolean>;
-  refreshUserSession: () => Promise<void>;
+  incrementProblemsSolved: (points: number) => void;
+  getUsersFromSameOrganization: () => MockUser[];
+  validateSession: () => boolean; // New function to validate session
+  refreshUserSession: () => void; // New function to refresh user session
 }
 
 export interface RegisterData {
@@ -46,6 +56,7 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Password validation function
 const isStrongPassword = (password: string): boolean => {
   const hasUpperCase = /[A-Z]/.test(password);
   const hasLowerCase = /[a-z]/.test(password);
@@ -56,6 +67,48 @@ const isStrongPassword = (password: string): boolean => {
   return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar && hasMinimumLength;
 };
 
+// Generate a unique device ID
+const generateDeviceId = (): string => {
+  const existingDeviceId = localStorage.getItem('codegen_device_id');
+  if (existingDeviceId) return existingDeviceId;
+  
+  const newDeviceId = Math.random().toString(36).substring(2, 15) + 
+                     Math.random().toString(36).substring(2, 15);
+  localStorage.setItem('codegen_device_id', newDeviceId);
+  return newDeviceId;
+};
+
+// Generate a JWT-like token (simulated for frontend only)
+const generateToken = (userId: string): { token: string, expiry: number } => {
+  const now = Date.now();
+  const expiryTime = now + (7 * 24 * 60 * 60 * 1000); // 7 days from now
+  
+  // In a real app, this would be a proper JWT signed by a server
+  const payload = {
+    userId,
+    deviceId: generateDeviceId(),
+    issuedAt: now,
+    expiresAt: expiryTime
+  };
+  
+  const token = btoa(JSON.stringify(payload)); // Base64 encoding (simulated JWT)
+  return { token, expiry: expiryTime };
+};
+
+// Validate token 
+const validateToken = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token));
+    return payload.expiresAt > Date.now();
+  } catch (e) {
+    return false;
+  }
+};
+
+// Initial mock users
+const initialMockUsers: MockUser[] = [];
+
+// Function to calculate rank based on problems solved
 const calculateRank = (problemsSolved: number): number => {
   if (problemsSolved >= 100) return 1;
   if (problemsSolved >= 80) return 2;
@@ -66,371 +119,506 @@ const calculateRank = (problemsSolved: number): number => {
   return 7;
 };
 
+// Function to get stored users from localStorage
+const getStoredUsers = (): MockUser[] => {
+  const storedUsers = localStorage.getItem('codegen_all_users');
+  if (storedUsers) {
+    try {
+      return JSON.parse(storedUsers);
+    } catch (e) {
+      console.error('Failed to parse stored users data:', e);
+      return initialMockUsers;
+    }
+  }
+  return initialMockUsers;
+};
+
+// Function to save users to localStorage
+const saveUsers = (users: MockUser[]) => {
+  localStorage.setItem('codegen_all_users', JSON.stringify(users));
+};
+
+// Function to save user data to sessionStorage for browser session persistence
+const saveUserToSessionStorage = (user: User) => {
+  sessionStorage.setItem('codegen_current_user', JSON.stringify({
+    ...user,
+    lastSyncTimestamp: Date.now(),
+    deviceId: generateDeviceId()
+  }));
+};
+
+// Function to save user data to localStorage for cross-session persistence
+const saveUserToLocalStorage = (user: User) => {
+  localStorage.setItem('codegen_user', JSON.stringify({
+    ...user,
+    lastSyncTimestamp: Date.now(),
+    deviceId: generateDeviceId(),
+    lastLogin: new Date().toISOString()
+  }));
+};
+
+// Function to get user from sessionStorage
+const getUserFromSessionStorage = (): User | null => {
+  const storedUser = sessionStorage.getItem('codegen_current_user');
+  if (storedUser) {
+    try {
+      return JSON.parse(storedUser);
+    } catch (e) {
+      console.error('Failed to parse stored user data from session:', e);
+      return null;
+    }
+  }
+  return null;
+};
+
+// Function to get user from localStorage
+const getUserFromLocalStorage = (): User | null => {
+  const storedUser = localStorage.getItem('codegen_user');
+  if (storedUser) {
+    try {
+      const user = JSON.parse(storedUser);
+      
+      // Check if token has expired (if it exists)
+      if (user.sessionToken && user.tokenExpiry) {
+        if (user.tokenExpiry < Date.now()) {
+          // Token expired, clear from localStorage
+          localStorage.removeItem('codegen_user');
+          sessionStorage.removeItem('codegen_current_user');
+          return null;
+        }
+      }
+      
+      return user;
+    } catch (e) {
+      console.error('Failed to parse stored user data from localStorage:', e);
+      return null;
+    }
+  }
+  return null;
+};
+
+// Sync user data across storage and devices
+const syncUserData = (user: User): User => {
+  const localUser = getUserFromLocalStorage();
+  const sessionUser = getUserFromSessionStorage();
+  
+  // Get the most recent data
+  let mostRecentUser = user;
+  
+  if (localUser && localUser.lastSyncTimestamp && 
+      (!mostRecentUser.lastSyncTimestamp || localUser.lastSyncTimestamp > mostRecentUser.lastSyncTimestamp)) {
+    mostRecentUser = localUser;
+  }
+  
+  if (sessionUser && sessionUser.lastSyncTimestamp && 
+      (!mostRecentUser.lastSyncTimestamp || sessionUser.lastSyncTimestamp > mostRecentUser.lastSyncTimestamp)) {
+    mostRecentUser = sessionUser;
+  }
+  
+  // Update all storage locations with most recent data
+  saveUserToSessionStorage(mostRecentUser);
+  saveUserToLocalStorage(mostRecentUser);
+  
+  return mostRecentUser;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const [allUsers, setAllUsers] = useState<MockUser[]>(getStoredUsers());
 
-  const transformSupabaseUser = async (supabaseUser: SupabaseUser): Promise<User | null> => {
-    if (!supabaseUser) return null;
+  // Session validation function
+  const validateSession = (): boolean => {
+    const localUser = getUserFromLocalStorage();
     
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', supabaseUser.id)
-      .single();
+    if (!localUser) return false;
     
-    if (error || !data) {
-      console.error('Error fetching user profile:', error);
-      return null;
+    // Check if token exists and is valid
+    if (localUser.sessionToken) {
+      return validateToken(localUser.sessionToken);
     }
     
-    return {
-      id: supabaseUser.id,
-      email: supabaseUser.email || '',
-      fullName: data.fullName || '',
-      organization: data.organization,
-      username: data.username || '',
-      userType: data.userType || 'student',
-      profileImage: data.profileImage,
-      problemsSolved: data.problemsSolved || 0,
-      points: data.points || 0,
-      rank: data.rank || 7,
-      downloads: data.downloads || 0
-    };
-  };
-
-  const validateSession = async (): Promise<boolean> => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      return !!session;
-    } catch (error) {
-      console.error('Session validation error:', error);
-      return false;
-    }
+    return false;
   };
   
-  const refreshUserSession = async (): Promise<void> => {
-    try {
-      const { data, error } = await supabase.auth.refreshSession();
-      if (error) throw error;
-      
-      if (data.user) {
-        const updatedUser = await transformSupabaseUser(data.user);
-        if (updatedUser) {
-          setUser(updatedUser);
-        }
+  // Session refresh function
+  const refreshUserSession = () => {
+    if (!user || !user.id) return;
+    
+    // Generate new token
+    const { token, expiry } = generateToken(user.id);
+    
+    // Update user with new token
+    const updatedUser = { 
+      ...user, 
+      sessionToken: token,
+      tokenExpiry: expiry,
+      lastSyncTimestamp: Date.now()
+    };
+    
+    setUser(updatedUser);
+    saveUserToSessionStorage(updatedUser);
+    saveUserToLocalStorage(updatedUser);
+    
+    // Update in all users collection
+    const updatedAllUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        return { ...u, sessionToken: token, tokenExpiry: expiry };
       }
-    } catch (error) {
-      console.error('Failed to refresh session:', error);
-      setUser(null);
-    }
+      return u;
+    });
+    
+    setAllUsers(updatedAllUsers);
+    saveUsers(updatedAllUsers);
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      setIsLoading(true);
-      
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-          if (supabaseUser) {
-            const appUser = await transformSupabaseUser(supabaseUser);
-            setUser(appUser);
-          }
+    // Check for stored user data in localStorage or sessionStorage on initial load
+    const localStorageUser = getUserFromLocalStorage();
+    const sessionStorageUser = getUserFromSessionStorage();
+    
+    let currentUser = null;
+    
+    // Prioritize session storage for current browser tab
+    if (sessionStorageUser) {
+      currentUser = sessionStorageUser;
+    } else if (localStorageUser) {
+      currentUser = localStorageUser;
+      // Also save to session storage for cross-tab consistency
+      saveUserToSessionStorage(localStorageUser);
+    }
+    
+    if (currentUser) {
+      // Validate session token if it exists
+      if (currentUser.sessionToken) {
+        const isValid = validateToken(currentUser.sessionToken);
+        if (!isValid) {
+          // Token is invalid or expired
+          localStorage.removeItem('codegen_user');
+          sessionStorage.removeItem('codegen_current_user');
+          setUser(null);
+          setIsLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        setUser(null);
-      } finally {
-        setIsLoading(false);
       }
       
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          const appUser = await transformSupabaseUser(session.user);
-          setUser(appUser);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-        }
-      });
+      // Sync data across storage mechanisms
+      const syncedUser = syncUserData(currentUser);
+      setUser(syncedUser);
       
-      return () => {
-        subscription.unsubscribe();
-      };
-    };
+      // Check if we need to update the allUsers array with any updated user data
+      if (syncedUser.id) {
+        const updatedAllUsers = allUsers.map(u => {
+          if (u.id === syncedUser.id) {
+            return { ...u, ...syncedUser, password: u.password }; // Keep password from storage
+          }
+          return u;
+        });
+        setAllUsers(updatedAllUsers);
+        saveUsers(updatedAllUsers);
+      }
+    }
     
-    initializeAuth();
+    setIsLoading(false);
+    
+    // Set up periodic token validation
+    const intervalId = setInterval(() => {
+      if (user && user.sessionToken) {
+        const isValid = validateToken(user.sessionToken);
+        if (!isValid) {
+          // Token has expired, refresh it
+          refreshUserSession();
+        }
+      }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   const register = async (data: RegisterData): Promise<void> => {
     setIsLoading(true);
     
-    try {
-      if (!isStrongPassword(data.password)) {
-        throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
-      }
-      
-      const isUsernameAvailable = await checkUsernameAvailability(data.username);
-      if (!isUsernameAvailable) {
-        throw new Error('Username is already taken');
-      }
-      
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-      });
-      
-      if (authError) throw authError;
-      
-      if (!authData.user) {
-        throw new Error('Registration failed');
-      }
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: authData.user.id,
-          fullName: data.fullName,
-          organization: data.organization,
-          username: data.username,
-          userType: data.userType,
-          problemsSolved: 0,
-          points: 0,
-          rank: 7,
-          downloads: 0
-        });
-      
-      if (profileError) throw profileError;
-      
-      const newUser = await transformSupabaseUser(authData.user);
-      setUser(newUser);
-      
-      toast({
-        title: "Registration Successful",
-        description: "Your CODEGEN account has been created successfully! Please check your email to verify your account.",
-      });
-      
-    } catch (error: any) {
-      toast({
-        title: "Registration Failed",
-        description: error?.message || "Failed to create account",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if user already exists
+    const userExists = allUsers.some(u => u.email === data.email || u.username === data.username);
+    
+    if (userExists) {
       setIsLoading(false);
+      throw new Error('User with this email or username already exists');
     }
+    
+    // Validate password strength
+    if (!isStrongPassword(data.password)) {
+      setIsLoading(false);
+      throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
+    }
+    
+    // Generate unique ID
+    const userId = Date.now().toString();
+    
+    // Generate authentication token
+    const { token, expiry } = generateToken(userId);
+    
+    // Create new user
+    const newUser: MockUser = {
+      id: userId,
+      fullName: data.fullName,
+      organization: data.organization,
+      username: data.username,
+      email: data.email,
+      userType: data.userType,
+      password: data.password,
+      profileImage: '',
+      problemsSolved: 0,
+      points: 0,
+      rank: 7, // Default rank
+      downloads: 0,
+      sessionToken: token,
+      tokenExpiry: expiry,
+      deviceId: generateDeviceId(),
+      lastLogin: new Date().toISOString(),
+      lastSyncTimestamp: Date.now()
+    };
+    
+    // Add to mock database
+    const updatedUsers = [...allUsers, newUser];
+    
+    setAllUsers(updatedUsers);
+    saveUsers(updatedUsers);
+    
+    // Update state and storage
+    // We omit the password when storing in state or localStorage
+    const userWithoutPassword: User = {
+      id: newUser.id,
+      fullName: newUser.fullName,
+      organization: newUser.organization,
+      username: newUser.username,
+      email: newUser.email,
+      userType: newUser.userType,
+      profileImage: newUser.profileImage,
+      problemsSolved: newUser.problemsSolved,
+      points: newUser.points,
+      rank: newUser.rank,
+      downloads: newUser.downloads,
+      sessionToken: token,
+      tokenExpiry: expiry,
+      deviceId: generateDeviceId(),
+      lastLogin: new Date().toISOString(),
+      lastSyncTimestamp: Date.now()
+    };
+    
+    setUser(userWithoutPassword);
+    saveUserToLocalStorage(userWithoutPassword);
+    saveUserToSessionStorage(userWithoutPassword);
+    setIsLoading(false);
+    
+    toast({
+      title: "Registration Successful",
+      description: "Your CODEGEN account has been created successfully!",
+    });
   };
 
   const login = async (email: string, password: string, rememberMe: boolean): Promise<void> => {
     setIsLoading(true);
     
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) throw error;
-      
-      if (!data.user) {
-        throw new Error('Login failed');
-      }
-      
-      const appUser = await transformSupabaseUser(data.user);
-      setUser(appUser);
-      
-      toast({
-        title: "Login Successful",
-        description: "Welcome back to CODEGEN!",
-      });
-      
-    } catch (error: any) {
-      toast({
-        title: "Login Failed",
-        description: error?.message || "Invalid email or password",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Find user in the stored users
+    const foundUser = allUsers.find(u => u.email === email && u.password === password);
+    
+    if (!foundUser) {
       setIsLoading(false);
+      throw new Error('Invalid email or password');
     }
+    
+    // Generate new authentication token
+    const { token, expiry } = generateToken(foundUser.id);
+    
+    // Create user object (without password)
+    const authenticatedUser: User = {
+      id: foundUser.id,
+      fullName: foundUser.fullName,
+      organization: foundUser.organization,
+      username: foundUser.username,
+      email: foundUser.email,
+      userType: foundUser.userType,
+      profileImage: foundUser.profileImage,
+      problemsSolved: foundUser.problemsSolved,
+      points: foundUser.points,
+      rank: foundUser.rank,
+      downloads: foundUser.downloads,
+      deviceId: generateDeviceId(),
+      lastLogin: new Date().toISOString(),
+      sessionToken: token,
+      tokenExpiry: expiry,
+      lastSyncTimestamp: Date.now()
+    };
+    
+    // Update state
+    setUser(authenticatedUser);
+    
+    // Always save to sessionStorage for browser session persistence
+    saveUserToSessionStorage(authenticatedUser);
+    
+    // Save to localStorage if rememberMe is enabled or for cross-device access
+    // We now always save to localStorage to enable cross-device login, but with different persistence
+    if (rememberMe) {
+      // Permanent storage
+      saveUserToLocalStorage(authenticatedUser);
+    } else {
+      // Session-only storage with expiration hint
+      const tempUser = {...authenticatedUser, sessionOnly: true};
+      saveUserToLocalStorage(tempUser);
+    }
+    
+    // Update the user's session token in the database
+    const updatedAllUsers = allUsers.map(u => {
+      if (u.id === foundUser.id) {
+        return { ...u, sessionToken: token, tokenExpiry: expiry, lastLogin: new Date().toISOString() };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedAllUsers);
+    saveUsers(updatedAllUsers);
+    
+    setIsLoading(false);
+    
+    toast({
+      title: "Login Successful",
+      description: "Welcome back to CODEGEN!",
+    });
   };
 
-  const logout = async (): Promise<void> => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+  const logout = () => {
+    // If user exists, invalidate their token in the database
+    if (user && user.id) {
+      const updatedAllUsers = allUsers.map(u => {
+        if (u.id === user.id) {
+          // Remove token from database record
+          const { sessionToken, tokenExpiry, ...rest } = u;
+          return rest;
+        }
+        return u;
+      });
       
-      setUser(null);
-      toast({
-        title: "Logged Out",
-        description: "You have been logged out successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Logout Failed",
-        description: error?.message || "Something went wrong",
-        variant: "destructive",
-      });
-      throw error;
+      setAllUsers(updatedAllUsers);
+      saveUsers(updatedAllUsers);
     }
+    
+    setUser(null);
+    localStorage.removeItem('codegen_user');
+    sessionStorage.removeItem('codegen_current_user');
+    
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully",
+    });
   };
 
-  const updateUser = async (data: Partial<User>): Promise<void> => {
+  const updateUser = (data: Partial<User>) => {
     if (!user) return;
     
-    try {
-      if (data.email && data.email !== user.email) {
-        const { error: updateEmailError } = await supabase.auth.updateUser({
-          email: data.email,
-        });
-        
-        if (updateEmailError) throw updateEmailError;
-      }
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          ...data,
-          ...(data.problemsSolved && { rank: calculateRank(data.problemsSolved) }),
-        })
-        .eq('id', user.id);
-      
-      if (profileError) throw profileError;
-      
-      const updatedUser = { ...user, ...data };
-      if (data.problemsSolved !== undefined) {
-        updatedUser.rank = calculateRank(data.problemsSolved);
-      }
-      
-      setUser(updatedUser);
-      
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been updated successfully",
-      });
-      
-    } catch (error: any) {
-      toast({
-        title: "Update Failed",
-        description: error?.message || "Failed to update profile",
-        variant: "destructive",
-      });
-      throw error;
+    const updatedUser = { ...user, ...data };
+    
+    // Update rank based on problems solved if problems were updated
+    if (data.problemsSolved !== undefined) {
+      updatedUser.rank = calculateRank(data.problemsSolved);
     }
+    
+    setUser(updatedUser);
+    
+    // Update in both storage locations
+    saveUserToLocalStorage(updatedUser);
+    saveUserToSessionStorage(updatedUser);
+    
+    // Also update in users database
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        return { ...u, ...data };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedUsers);
+    saveUsers(updatedUsers);
+    
+    toast({
+      title: "Profile Updated",
+      description: "Your profile has been updated successfully",
+    });
   };
 
-  const incrementProblemsSolved = async (points: number): Promise<void> => {
+  const incrementProblemsSolved = (points: number) => {
     if (!user) return;
     
-    try {
-      const newProblemsSolved = user.problemsSolved + 1;
-      const newPoints = user.points + points;
-      const newRank = calculateRank(newProblemsSolved);
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          problemsSolved: newProblemsSolved,
-          points: newPoints,
-          rank: newRank
-        })
-        .eq('id', user.id);
-      
-      if (error) throw error;
-      
-      setUser({
-        ...user,
-        problemsSolved: newProblemsSolved,
-        points: newPoints,
-        rank: newRank
-      });
-      
-      toast({
-        title: "Problem Completed!",
-        description: `+${points} points added to your profile.`,
-      });
-      
-    } catch (error: any) {
-      toast({
-        title: "Update Failed",
-        description: error?.message || "Failed to update progress",
-        variant: "destructive",
-      });
-    }
+    const updatedUser = { 
+      ...user, 
+      problemsSolved: user.problemsSolved + 1,
+      points: user.points + points
+    };
+    
+    // Update rank based on new problem count
+    updatedUser.rank = calculateRank(updatedUser.problemsSolved);
+    
+    setUser(updatedUser);
+    
+    // Update in both storage locations
+    saveUserToLocalStorage(updatedUser);
+    saveUserToSessionStorage(updatedUser);
+    
+    // Also update in users database
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === user.id) {
+        return { 
+          ...u, 
+          problemsSolved: u.problemsSolved + 1,
+          points: u.points + points,
+          rank: calculateRank(u.problemsSolved + 1)
+        };
+      }
+      return u;
+    });
+    
+    setAllUsers(updatedUsers);
+    saveUsers(updatedUsers);
+    
+    toast({
+      title: "Problem Completed!",
+      description: `+${points} points added to your profile.`,
+    });
   };
 
   const checkUsernameAvailability = async (username: string): Promise<boolean> => {
-    if (!username || username.length < 3) return false;
-    
-    try {
-      const { data, error, count } = await supabase
-        .from('profiles')
-        .select('username', { count: 'exact' })
-        .eq('username', username);
-      
-      if (error) throw error;
-      
-      return count === 0 || (user && data?.[0]?.username === user.username);
-      
-    } catch (error) {
-      console.error('Error checking username availability:', error);
-      return false;
-    }
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return !allUsers.some(u => u.username === username && u.id !== user?.id);
   };
 
   const checkEmailAvailability = async (email: string): Promise<boolean> => {
-    if (!email || !email.includes('@')) return false;
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('check-email-availability', {
-        body: { email }
-      });
-      
-      if (error) throw error;
-      
-      return data?.available || false;
-      
-    } catch (error) {
-      console.error('Error checking email availability:', error);
-      return false;
-    }
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return !allUsers.some(u => u.email === email && u.id !== user?.id);
   };
 
-  const getUsersFromSameOrganization = async (): Promise<User[]> => {
+  // Function to get users from the same organization, excluding the current user and demo user
+  const getUsersFromSameOrganization = (): MockUser[] => {
     if (!user || !user.organization) return [];
     
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('organization', user.organization)
-        .neq('id', user.id);
-      
-      if (error) throw error;
-      
-      return data.map(profile => ({
-        id: profile.id,
-        fullName: profile.fullName,
-        organization: profile.organization,
-        username: profile.username,
-        email: profile.email || '',
-        userType: profile.userType,
-        profileImage: profile.profileImage,
-        problemsSolved: profile.problemsSolved || 0,
-        points: profile.points || 0,
-        rank: profile.rank || 7,
-        downloads: profile.downloads || 0
+    return allUsers
+      .filter(u => 
+        u.organization === user.organization && 
+        u.id !== user.id && 
+        u.email !== 'demo@example.com'
+      )
+      .map(u => ({
+        ...u,
+        password: '********' // Mask password for security
       }));
-      
-    } catch (error) {
-      console.error('Error fetching users from organization:', error);
-      return [];
-    }
   };
 
   return (
