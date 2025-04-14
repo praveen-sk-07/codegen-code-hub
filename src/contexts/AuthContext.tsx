@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
@@ -47,7 +46,6 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Password validation function
 const isStrongPassword = (password: string): boolean => {
   const hasUpperCase = /[A-Z]/.test(password);
   const hasLowerCase = /[a-z]/.test(password);
@@ -58,7 +56,6 @@ const isStrongPassword = (password: string): boolean => {
   return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar && hasMinimumLength;
 };
 
-// Function to calculate rank based on problems solved
 const calculateRank = (problemsSolved: number): number => {
   if (problemsSolved >= 100) return 1;
   if (problemsSolved >= 80) return 2;
@@ -74,11 +71,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Function to transform the Supabase user into our app's user format
   const transformSupabaseUser = async (supabaseUser: SupabaseUser): Promise<User | null> => {
     if (!supabaseUser) return null;
     
-    // Fetch the user profile from the profiles table
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -105,7 +100,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Session validation function
   const validateSession = async (): Promise<boolean> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -116,7 +110,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
-  // Session refresh function
   const refreshUserSession = async (): Promise<void> => {
     try {
       const { data, error } = await supabase.auth.refreshSession();
@@ -139,7 +132,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(true);
       
       try {
-        // Check if we have an active session
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
@@ -156,17 +148,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
       }
       
-      // Set up auth state change listener
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
           const appUser = await transformSupabaseUser(session.user);
           setUser(appUser);
-        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
       });
       
-      // Clean up subscription on unmount
       return () => {
         subscription.unsubscribe();
       };
@@ -179,18 +169,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
-      // Validate password strength
       if (!isStrongPassword(data.password)) {
         throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
       }
       
-      // Check username availability
       const isUsernameAvailable = await checkUsernameAvailability(data.username);
       if (!isUsernameAvailable) {
         throw new Error('Username is already taken');
       }
       
-      // Register user with Supabase
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -202,7 +189,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Registration failed');
       }
       
-      // Create profile record
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
@@ -219,7 +205,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (profileError) throw profileError;
       
-      // Transform Supabase user to app user
       const newUser = await transformSupabaseUser(authData.user);
       setUser(newUser);
       
@@ -299,7 +284,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     
     try {
-      // Update Supabase Auth if email is being updated
       if (data.email && data.email !== user.email) {
         const { error: updateEmailError } = await supabase.auth.updateUser({
           email: data.email,
@@ -308,19 +292,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (updateEmailError) throw updateEmailError;
       }
       
-      // Update profile information
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
           ...data,
-          // Update rank if problemsSolved is updated
           ...(data.problemsSolved && { rank: calculateRank(data.problemsSolved) }),
         })
         .eq('id', user.id);
       
       if (profileError) throw profileError;
       
-      // Update local state
       const updatedUser = { ...user, ...data };
       if (data.problemsSolved !== undefined) {
         updatedUser.rank = calculateRank(data.problemsSolved);
@@ -351,7 +332,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newPoints = user.points + points;
       const newRank = calculateRank(newProblemsSolved);
       
-      // Update profile in Supabase
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -363,7 +343,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) throw error;
       
-      // Update local state
       setUser({
         ...user,
         problemsSolved: newProblemsSolved,
@@ -396,7 +375,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) throw error;
       
-      // If the username exists and it's not the current user's, it's unavailable
       return count === 0 || (user && data?.[0]?.username === user.username);
       
     } catch (error) {
@@ -409,8 +387,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!email || !email.includes('@')) return false;
     
     try {
-      // We need to check if the email exists in the auth.users table
-      // Since direct access to auth.users is restricted, we'll check through a custom function
       const { data, error } = await supabase.functions.invoke('check-email-availability', {
         body: { email }
       });
@@ -421,7 +397,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
     } catch (error) {
       console.error('Error checking email availability:', error);
-      // Default to unavailable in case of error
       return false;
     }
   };
@@ -438,7 +413,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) throw error;
       
-      // Transform to app user format
       return data.map(profile => ({
         id: profile.id,
         fullName: profile.fullName,

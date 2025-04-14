@@ -41,7 +41,8 @@ const AuthGuard = ({ children }: AuthGuardProps) => {
     
     // Set up Supabase auth listener for real-time session changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      // Check for session end events
+      if (event === 'SIGNED_OUT') {
         navigate('/login');
       }
     });
