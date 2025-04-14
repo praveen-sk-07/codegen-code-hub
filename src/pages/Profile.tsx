@@ -87,10 +87,19 @@ const Profile = () => {
   }, [user, form]);
 
   useEffect(() => {
-    const fetchColleagues = () => {
+    const fetchColleagues = async () => {
       if (selectedTab === 'colleagues' && user?.organization) {
-        const colleagues = getUsersFromSameOrganization();
-        setColleagueUsers(colleagues);
+        try {
+          const colleagues = await getUsersFromSameOrganization();
+          setColleagueUsers(colleagues);
+        } catch (error) {
+          console.error('Failed to fetch colleagues:', error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch colleagues. Please try again.",
+            variant: "destructive",
+          });
+        }
       }
     };
 
@@ -99,7 +108,7 @@ const Profile = () => {
     const intervalId = setInterval(fetchColleagues, 30000);
     
     return () => clearInterval(intervalId);
-  }, [selectedTab, user?.organization, getUsersFromSameOrganization]);
+  }, [selectedTab, user?.organization, getUsersFromSameOrganization, toast]);
 
   React.useEffect(() => {
     if (isEditMode && watchUsername !== user?.username) {
