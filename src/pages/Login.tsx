@@ -42,11 +42,12 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register, login, isAuthenticated, checkUsernameAvailability, checkEmailAvailability } = useAuth();
   const navigate = useNavigate();
+  
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-  const [validationMode, setValidationMode] = useState<'realtime' | 'onsubmit'>('onsubmit');
+  
+  const [validationMode] = useState<'realtime' | 'onsubmit'>('onsubmit');
 
-  // Initialize forms first before using them
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -104,45 +105,7 @@ const Login = () => {
   }, [isAuthenticated, navigate]);
 
   const userType = registerForm.watch('userType');
-  const watchUsername = registerForm.watch('username');
-  const watchEmail = registerForm.watch('email');
-
-  React.useEffect(() => {
-    if (validationMode === 'realtime' && activeTab === 'register' && watchUsername) {
-      const checkUsername = async () => {
-        if (watchUsername.length >= 3) {
-          setUsernameStatus('checking');
-          const isAvailable = await checkUsernameAvailability(watchUsername);
-          setUsernameStatus(isAvailable ? 'available' : 'taken');
-        }
-      };
-      
-      const timer = setTimeout(() => {
-        checkUsername();
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [watchUsername, activeTab, checkUsernameAvailability, validationMode]);
-
-  React.useEffect(() => {
-    if (validationMode === 'realtime' && activeTab === 'register' && watchEmail) {
-      const checkEmail = async () => {
-        if (watchEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-          setEmailStatus('checking');
-          const isAvailable = await checkEmailAvailability(watchEmail);
-          setEmailStatus(isAvailable ? 'available' : 'taken');
-        }
-      };
-      
-      const timer = setTimeout(() => {
-        checkEmail();
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [watchEmail, activeTab, checkEmailAvailability, validationMode]);
-
+  
   const onLoginSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
     
@@ -168,31 +131,6 @@ const Login = () => {
     setIsSubmitting(true);
     
     try {
-      let canProceed = true;
-      
-      const isUsernameAvailable = await checkUsernameAvailability(data.username);
-      if (!isUsernameAvailable) {
-        registerForm.setError('username', { 
-          type: 'manual', 
-          message: 'This username is already taken' 
-        });
-        canProceed = false;
-      }
-      
-      const isEmailAvailable = await checkEmailAvailability(data.email);
-      if (!isEmailAvailable) {
-        registerForm.setError('email', { 
-          type: 'manual', 
-          message: 'This email is already in use' 
-        });
-        canProceed = false;
-      }
-      
-      if (!canProceed) {
-        setIsSubmitting(false);
-        return;
-      }
-      
       const registerData: RegisterData = {
         userType: data.userType,
         fullName: data.fullName,
@@ -440,19 +378,6 @@ const Login = () => {
                                   className="pl-9" 
                                   {...field} 
                                 />
-                                {validationMode === 'realtime' && field.value.length >= 3 && (
-                                  <div className="absolute right-3 top-3">
-                                    {usernameStatus === 'checking' && (
-                                      <span className="text-gray-500 text-sm">Checking...</span>
-                                    )}
-                                    {usernameStatus === 'available' && (
-                                      <span className="text-green-500 text-sm">Available</span>
-                                    )}
-                                    {usernameStatus === 'taken' && (
-                                      <span className="text-red-500 text-sm">Username taken</span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -474,19 +399,6 @@ const Login = () => {
                                   className="pl-9" 
                                   {...field} 
                                 />
-                                {validationMode === 'realtime' && field.value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) && (
-                                  <div className="absolute right-3 top-3">
-                                    {emailStatus === 'checking' && (
-                                      <span className="text-gray-500 text-sm">Checking...</span>
-                                    )}
-                                    {emailStatus === 'available' && (
-                                      <span className="text-green-500 text-sm">Available</span>
-                                    )}
-                                    {emailStatus === 'taken' && (
-                                      <span className="text-red-500 text-sm">Email taken</span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </FormControl>
                             <FormMessage />

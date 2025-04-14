@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, Send, X, Bot, ThumbsUp, ThumbsDown, HelpCircle } from 'lucide-react';
@@ -92,7 +91,6 @@ const initialMessages: Message[] = [
   },
 ];
 
-// Sample responses for when API is unavailable
 const fallbackResponses = [
   "I found a relevant solution for this. In programming, breaking down complex problems into smaller steps is a good approach. Let's start by understanding the core issue.",
   "This is a common programming challenge. Let's tackle it step by step. First, we need to identify the key requirements and constraints.",
@@ -102,7 +100,6 @@ const fallbackResponses = [
 ];
 
 const getFallbackResponse = (query: string) => {
-  // Generate deterministic index based on query to get consistent responses
   const index = Math.abs(query.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % fallbackResponses.length);
   return fallbackResponses[index];
 };
@@ -119,19 +116,16 @@ const Chatbot = () => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Check API availability on component mount
   useEffect(() => {
     checkApiAvailability();
   }, []);
 
-  // Function to check if API is accessible
   const checkApiAvailability = async () => {
     try {
       const controller = new AbortController();
@@ -153,7 +147,6 @@ const Chatbot = () => {
   const handleSendMessage = () => {
     if (inputMessage.trim() === '') return;
 
-    // Add user message
     const userMessage: Message = {
       id: messages.length + 1,
       content: inputMessage,
@@ -165,7 +158,6 @@ const Chatbot = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    // If API is unavailable, use fallback responses
     if (!apiAvailable) {
       setTimeout(() => {
         const botMessage: Message = {
@@ -176,11 +168,10 @@ const Chatbot = () => {
         };
         setMessages(prev => [...prev, botMessage]);
         setIsTyping(false);
-      }, 1500); // Simulate typing delay
+      }, 1500);
       return;
     }
 
-    // Fetch response from codegen-helpdesk API
     fetch('https://codegen-helpdesk.created.app/api/chat', {
       method: 'POST',
       headers: {
@@ -212,7 +203,6 @@ const Chatbot = () => {
     .catch(error => {
       console.error('Error fetching from helpdesk:', error);
       
-      // If API call fails, use fallback response
       const fallbackMessage = getFallbackResponse(inputMessage);
       
       const errorMessage: Message = {
@@ -224,10 +214,8 @@ const Chatbot = () => {
       
       setMessages(prev => [...prev, errorMessage]);
       
-      // Set API as unavailable after a failed call
       setApiAvailable(false);
       
-      // Show toast only for first failure
       toast({
         title: "Offline Mode",
         description: "Using fallback responses. Some features may be limited.",
@@ -275,7 +263,6 @@ const Chatbot = () => {
 
   return (
     <>
-      {/* Chat Button */}
       <motion.button
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
@@ -286,7 +273,6 @@ const Chatbot = () => {
         {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
       </motion.button>
 
-      {/* Chat Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -295,7 +281,6 @@ const Chatbot = () => {
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             className="fixed bottom-24 right-6 w-80 sm:w-96 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-40 flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700"
           >
-            {/* Chat Header */}
             <div className="bg-codegen-purple text-white p-3 flex items-center">
               <Bot className="mr-2" size={20} />
               <div className="flex-1">
@@ -312,7 +297,6 @@ const Chatbot = () => {
               </Button>
             </div>
 
-            {/* Chat Messages */}
             <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
               <div className="space-y-4">
                 {messages.map((message) => (
@@ -333,7 +317,6 @@ const Chatbot = () => {
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                         
-                        {/* Feedback buttons for bot messages */}
                         {message.sender === 'bot' && (
                           <div className="flex space-x-1">
                             <button 
@@ -374,7 +357,6 @@ const Chatbot = () => {
               </div>
             </ScrollArea>
 
-            {/* Input Area */}
             <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex items-end gap-2">
               <Textarea
                 placeholder="Type your message..."
@@ -397,14 +379,12 @@ const Chatbot = () => {
         )}
       </AnimatePresence>
       
-      {/* Quick Feedback Dialog */}
       <FeedbackDialog 
         isOpen={feedbackDialogOpen} 
         onClose={() => setFeedbackDialogOpen(false)} 
         chatMessage={currentFeedbackMessage} 
       />
       
-      {/* Full Feedback Form Sheet */}
       <Sheet open={fullFeedbackOpen} onOpenChange={setFullFeedbackOpen}>
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
