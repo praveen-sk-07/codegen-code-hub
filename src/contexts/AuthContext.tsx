@@ -46,6 +46,16 @@ export interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const isStrongPassword = (password: string): boolean => {
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const hasMinimumLength = password.length >= 8;
+  
+  return hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar && hasMinimumLength;
+};
+
 const calculateRank = (problemsSolved: number): number => {
   if (problemsSolved >= 100) return 1;
   if (problemsSolved >= 80) return 2;
@@ -159,17 +169,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     
     try {
+      if (!isStrongPassword(data.password)) {
+        throw new Error('Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character');
+      }
+      
+      const isUsernameAvailable = await checkUsernameAvailability(data.username);
+      if (!isUsernameAvailable) {
+        throw new Error('Username is already taken');
+      }
+      
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
       });
       
-      if (authError) {
-        if (authError.message.includes('email') && authError.message.includes('taken')) {
-          throw new Error('This email is already registered. Please log in or use a different email.');
-        }
-        throw authError;
-      }
+      if (authError) throw authError;
       
       if (!authData.user) {
         throw new Error('Registration failed');
@@ -189,12 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           downloads: 0
         });
       
-      if (profileError) {
-        if (profileError.message.includes('username') || profileError.message.includes('unique constraint')) {
-          throw new Error('This username is already taken. Please choose a different username.');
-        }
-        throw profileError;
-      }
+      if (profileError) throw profileError;
       
       const newUser = await transformSupabaseUser(authData.user);
       setUser(newUser);
@@ -356,11 +365,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const checkUsernameAvailability = async (username: string): Promise<boolean> => {
-    return true;
+    if (!username || username.length < 3) return false;
+    
+    try {
+      const { data, error, count } = await supabase
+        .from('profiles')
+        .select('username', { count: 'exact' })
+        .eq('username', username);
+      
+      if (error) throw error;
+      
+      return count === 0 || (user && data?.[0]?.username === user.username);
+      
+    } catch (error) {
+      console.error('Error checking username availability:', error);
+      return false;
+    }
   };
 
   const checkEmailAvailability = async (email: string): Promise<boolean> => {
-    return true;
+    if (!email || !email.includes('@')) return false;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('check-email-availability', {
+        body: { email }
+      });
+      
+      if (error) throw error;
+      
+      return data?.available || false;
+      
+    } catch (error) {
+      console.error('Error checking email availability:', error);
+      return false;
+    }
   };
 
   const getUsersFromSameOrganization = async (): Promise<User[]> => {
