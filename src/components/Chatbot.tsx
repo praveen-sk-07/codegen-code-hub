@@ -92,21 +92,6 @@ const initialMessages: Message[] = [
   },
 ];
 
-// Sample responses for when API is unavailable
-const fallbackResponses = [
-  "I found a relevant solution for this. In programming, breaking down complex problems into smaller steps is a good approach. Let's start by understanding the core issue.",
-  "This is a common programming challenge. Let's tackle it step by step. First, we need to identify the key requirements and constraints.",
-  "Based on your question, here's a helpful approach. When working with algorithms, consider time and space complexity before implementing the solution.",
-  "For this coding task, I'd recommend starting with a simple implementation and then optimizing as needed. Focus on readability first.",
-  "Let me help with that coding question. A good practice is to write test cases before implementing your solution to ensure it works as expected."
-];
-
-const getFallbackResponse = (query: string) => {
-  // Generate deterministic index based on query to get consistent responses
-  const index = Math.abs(query.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % fallbackResponses.length);
-  return fallbackResponses[index];
-};
-
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -115,7 +100,6 @@ const Chatbot = () => {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [fullFeedbackOpen, setFullFeedbackOpen] = useState(false);
   const [currentFeedbackMessage, setCurrentFeedbackMessage] = useState('');
-  const [apiAvailable, setApiAvailable] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -125,30 +109,6 @@ const Chatbot = () => {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
-
-  // Check API availability on component mount
-  useEffect(() => {
-    checkApiAvailability();
-  }, []);
-
-  // Function to check if API is accessible
-  const checkApiAvailability = async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch('https://codegen-helpdesk.created.app/api/status', {
-        method: 'GET',
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      setApiAvailable(response.ok);
-    } catch (error) {
-      console.warn('API availability check failed:', error);
-      setApiAvailable(false);
-    }
-  };
 
   const handleSendMessage = () => {
     if (inputMessage.trim() === '') return;
@@ -164,21 +124,6 @@ const Chatbot = () => {
     setMessages([...messages, userMessage]);
     setInputMessage('');
     setIsTyping(true);
-
-    // If API is unavailable, use fallback responses
-    if (!apiAvailable) {
-      setTimeout(() => {
-        const botMessage: Message = {
-          id: messages.length + 2,
-          content: getFallbackResponse(inputMessage),
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
-        setIsTyping(false);
-      }, 1500); // Simulate typing delay
-      return;
-    }
 
     // Fetch response from codegen-helpdesk API
     fetch('https://codegen-helpdesk.created.app/api/chat', {
@@ -212,26 +157,19 @@ const Chatbot = () => {
     .catch(error => {
       console.error('Error fetching from helpdesk:', error);
       
-      // If API call fails, use fallback response
-      const fallbackMessage = getFallbackResponse(inputMessage);
-      
       const errorMessage: Message = {
         id: messages.length + 2,
-        content: fallbackMessage,
+        content: "Sorry, I'm having trouble connecting to my knowledge base right now. Please try again later.",
         sender: 'bot',
         timestamp: new Date(),
       };
       
       setMessages(prev => [...prev, errorMessage]);
       
-      // Set API as unavailable after a failed call
-      setApiAvailable(false);
-      
-      // Show toast only for first failure
       toast({
-        title: "Offline Mode",
-        description: "Using fallback responses. Some features may be limited.",
-        variant: "default",
+        title: "Connection Error",
+        description: "Could not connect to the CodeHelp service. Please check your internet connection and try again.",
+        variant: "destructive",
       });
     })
     .finally(() => {
@@ -300,9 +238,7 @@ const Chatbot = () => {
               <Bot className="mr-2" size={20} />
               <div className="flex-1">
                 <h3 className="font-medium">CodeHelp</h3>
-                <p className="text-xs opacity-90">
-                  {apiAvailable ? "Coding assistant" : "Coding assistant (offline mode)"}
-                </p>
+                <p className="text-xs opacity-90">Coding assistant</p>
               </div>
               <Button variant="ghost" size="icon" onClick={openFullFeedbackForm} className="text-white hover:bg-white/20 mr-1">
                 <HelpCircle size={18} />
