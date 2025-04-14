@@ -1,16 +1,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// For development purposes, we'll use placeholder values if environment variables are not available
-// In production, these should be properly set in your environment
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-url.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
+// Use the provided environment variables or fallback to the hardcoded values
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hhcqjzszbkdawyxldhqd.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhoY3FqenN6YmtkYXd5eGxkaHFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2MTA0NzgsImV4cCI6MjA2MDE4NjQ3OH0.a-BTHulGtWJ0cp68KAvnOlKDb-xHKr_4pK-xe4Iit24';
 
-// Log a warning instead of an error to prevent blocking the application
+// Only log warnings in development mode when using fallbacks
 if (import.meta.env.DEV && (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY)) {
-  console.warn('Supabase URL or Anon Key missing. Using placeholder values for development.');
-  console.warn('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.');
-  console.warn('For production, make sure to use real Supabase credentials.');
+  console.warn('Supabase URL or Anon Key missing from environment variables. Using hardcoded values.');
+  console.warn('For production, make sure to set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
