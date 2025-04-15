@@ -1,14 +1,13 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, Send, X, Bot, ThumbsUp, ThumbsDown, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useForm } from '@formspree/react';
-import FeedbackForm from './FeedbackForm';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 interface Message {
   id: number;
@@ -91,20 +90,16 @@ const initialMessages: Message[] = [
   },
 ];
 
-const fallbackResponses = [
-  "I found a relevant solution for this. In programming, breaking down complex problems into smaller steps is a good approach. Let's start by understanding the core issue.",
-  "This is a common programming challenge. Let's tackle it step by step. First, we need to identify the key requirements and constraints.",
-  "Based on your question, here's a helpful approach. When working with algorithms, consider time and space complexity before implementing the solution.",
-  "For this coding task, I'd recommend starting with a simple implementation and then optimizing as needed. Focus on readability first.",
-  "Let me help with that coding question. A good practice is to write test cases before implementing your solution to ensure it works as expected."
-];
-
-const getFallbackResponse = (query: string) => {
-  const index = Math.abs(query.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % fallbackResponses.length);
-  return fallbackResponses[index];
+// Sample responses for common coding questions
+const sampleResponses: Record<string, string> = {
+  "how to start coding": "To start coding, I recommend beginning with a simple language like Python or JavaScript. You can try online platforms like Codecademy or freeCodeCamp for interactive lessons. Start with basic concepts like variables, data types, and control structures before moving to more complex topics.",
+  "what is a function": "A function is a reusable block of code that performs a specific task. It takes inputs (parameters), processes them, and returns an output. Functions help make code more organized, reusable, and easier to test.",
+  "what is an array": "An array is a data structure that stores a collection of elements, each identified by an index or a key. Arrays allow you to store multiple values in a single variable and access them efficiently.",
+  "javascript tutorial": "For JavaScript tutorials, I recommend checking the Learning Resources section of CODEGEN. You'll find structured video tutorials and documentation to help you learn JavaScript from basics to advanced concepts.",
+  "how to debug code": "Debugging involves identifying and fixing errors in your code. You can use console.log() statements to print variable values, use browser developer tools for JavaScript, or IDE debuggers to step through your code line by line.",
+  "what is recursion": "Recursion is when a function calls itself to solve a smaller instance of the same problem. It consists of a base case (stopping condition) and a recursive case. While powerful, it must be used carefully to avoid stack overflow errors.",
+  "help": "I can help with coding questions, explain programming concepts, guide you in using CODEGEN features, or provide resources for learning. Just ask me what you'd like to know!"
 };
-
-const API_ENDPOINT = 'https://codegen-helpdesk.created.app';
 
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -112,43 +107,21 @@ const Chatbot = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [fullFeedbackOpen, setFullFeedbackOpen] = useState(false);
   const [currentFeedbackMessage, setCurrentFeedbackMessage] = useState('');
-  const [apiAvailable, setApiAvailable] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
 
-  useEffect(() => {
-    checkApiAvailability();
-  }, []);
-
-  const checkApiAvailability = async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(`${API_ENDPOINT}/api/status`, {
-        method: 'GET',
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      setApiAvailable(response.ok);
-    } catch (error) {
-      console.warn('API availability check failed:', error);
-      setApiAvailable(false);
-    }
-  };
-
   const handleSendMessage = () => {
     if (inputMessage.trim() === '') return;
 
+    // Add user message
     const userMessage: Message = {
       id: messages.length + 1,
       content: inputMessage,
@@ -160,21 +133,8 @@ const Chatbot = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    if (!apiAvailable) {
-      setTimeout(() => {
-        const botMessage: Message = {
-          id: messages.length + 2,
-          content: getFallbackResponse(inputMessage),
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
-        setIsTyping(false);
-      }, 1500);
-      return;
-    }
-
-    fetch(`${API_ENDPOINT}/api/chat`, {
+    // Attempt to fetch response from codegen-helpdesk
+    fetch('https://codegen-helpdesk.created.app/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -183,50 +143,62 @@ const Chatbot = () => {
         message: inputMessage,
       }),
     })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('API response was not ok');
-      }
-      return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-      if (data && data.response) {
-        const botMessage: Message = {
-          id: messages.length + 2,
-          content: data.response,
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botMessage]);
-      } else {
-        throw new Error('Invalid response format');
-      }
-    })
-    .catch(error => {
-      console.error('Error fetching from helpdesk:', error);
+      // Use the AI response if available
+      const botResponse = data?.response || fallbackResponse(inputMessage);
       
-      const fallbackMessage = getFallbackResponse(inputMessage);
-      
-      const errorMessage: Message = {
+      const botMessage: Message = {
         id: messages.length + 2,
-        content: fallbackMessage,
+        content: botResponse,
         sender: 'bot',
         timestamp: new Date(),
       };
-      
-      setMessages(prev => [...prev, errorMessage]);
-      
-      setApiAvailable(false);
-      
-      toast({
-        title: "Offline Mode",
-        description: "Using fallback responses. Some features may be limited.",
-        variant: "default",
-      });
+
+      setMessages(prev => [...prev, botMessage]);
+    })
+    .catch(error => {
+      console.error('Error fetching from helpdesk:', error);
+      // Fall back to local responses
+      const botMessage: Message = {
+        id: messages.length + 2,
+        content: fallbackResponse(inputMessage),
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, botMessage]);
     })
     .finally(() => {
       setIsTyping(false);
     });
+  };
+
+  const fallbackResponse = (userInput: string) => {
+    let botResponse = "I'm not sure how to help with that. Could you try asking something related to coding or the CODEGEN platform?";
+      
+    // Check for predefined answers
+    const lowercaseInput = userInput.toLowerCase();
+    
+    // Try to match input with sample responses
+    for (const [key, value] of Object.entries(sampleResponses)) {
+      if (lowercaseInput.includes(key)) {
+        botResponse = value;
+        break;
+      }
+    }
+    
+    // Special cases for greetings
+    if (lowercaseInput.match(/^(hi|hello|hey|greetings)/i)) {
+      botResponse = "Hello! How can I assist you with coding or using the CODEGEN platform today?";
+    }
+    
+    // Special case for thank you
+    if (lowercaseInput.match(/thank you|thanks/i)) {
+      botResponse = "You're welcome! If you have more questions, feel free to ask anytime.";
+    }
+
+    return botResponse;
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -239,10 +211,6 @@ const Chatbot = () => {
   const openFeedbackDialog = (message: string) => {
     setCurrentFeedbackMessage(message);
     setFeedbackDialogOpen(true);
-  };
-  
-  const openFullFeedbackForm = () => {
-    setFullFeedbackOpen(true);
   };
 
   const handleFeedback = (isHelpful: boolean, messageContent: string) => {
@@ -265,6 +233,7 @@ const Chatbot = () => {
 
   return (
     <>
+      {/* Chat Button */}
       <motion.button
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
@@ -275,6 +244,7 @@ const Chatbot = () => {
         {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
       </motion.button>
 
+      {/* Chat Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -283,22 +253,19 @@ const Chatbot = () => {
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             className="fixed bottom-24 right-6 w-80 sm:w-96 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-40 flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700"
           >
+            {/* Chat Header */}
             <div className="bg-codegen-purple text-white p-3 flex items-center">
               <Bot className="mr-2" size={20} />
               <div className="flex-1">
                 <h3 className="font-medium">CodeHelp</h3>
-                <p className="text-xs opacity-90">
-                  {apiAvailable ? "Coding assistant" : "Coding assistant (offline mode)"}
-                </p>
+                <p className="text-xs opacity-90">Coding assistant</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={openFullFeedbackForm} className="text-white hover:bg-white/20 mr-1">
-                <HelpCircle size={18} />
-              </Button>
               <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-white/20">
                 <X size={18} />
               </Button>
             </div>
 
+            {/* Chat Messages */}
             <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
               <div className="space-y-4">
                 {messages.map((message) => (
@@ -319,6 +286,7 @@ const Chatbot = () => {
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                         
+                        {/* Feedback buttons for bot messages */}
                         {message.sender === 'bot' && (
                           <div className="flex space-x-1">
                             <button 
@@ -359,6 +327,7 @@ const Chatbot = () => {
               </div>
             </ScrollArea>
 
+            {/* Input Area */}
             <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex items-end gap-2">
               <Textarea
                 placeholder="Type your message..."
@@ -372,7 +341,7 @@ const Chatbot = () => {
                 size="icon"
                 className="bg-codegen-purple hover:bg-codegen-purple/90 h-10 w-10 rounded-full flex-shrink-0"
                 onClick={handleSendMessage}
-                disabled={inputMessage.trim() === '' || isTyping}
+                disabled={inputMessage.trim() === ''}
               >
                 <Send size={18} />
               </Button>
@@ -381,22 +350,12 @@ const Chatbot = () => {
         )}
       </AnimatePresence>
       
+      {/* Feedback Dialog */}
       <FeedbackDialog 
         isOpen={feedbackDialogOpen} 
         onClose={() => setFeedbackDialogOpen(false)} 
         chatMessage={currentFeedbackMessage} 
       />
-      
-      <Sheet open={fullFeedbackOpen} onOpenChange={setFullFeedbackOpen}>
-        <SheetContent className="sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Send Feedback</SheetTitle>
-          </SheetHeader>
-          <div className="py-4">
-            <FeedbackForm onClose={() => setFullFeedbackOpen(false)} />
-          </div>
-        </SheetContent>
-      </Sheet>
     </>
   );
 };

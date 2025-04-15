@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -40,9 +41,12 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, login, isAuthenticated } = useAuth();
+  const { register, login, isAuthenticated, checkUsernameAvailability, checkEmailAvailability } = useAuth();
   const navigate = useNavigate();
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState(true);
+  const [isEmailAvailable, setIsEmailAvailable] = useState(true);
 
+  // Initialize forms first before using them
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -100,7 +104,43 @@ const Login = () => {
   }, [isAuthenticated, navigate]);
 
   const userType = registerForm.watch('userType');
-  
+  const watchUsername = registerForm.watch('username');
+  const watchEmail = registerForm.watch('email');
+
+  React.useEffect(() => {
+    if (activeTab === 'register' && watchUsername) {
+      const checkUsername = async () => {
+        if (watchUsername.length >= 3) {
+          const isAvailable = await checkUsernameAvailability(watchUsername);
+          setIsUsernameAvailable(isAvailable);
+        }
+      };
+      
+      const timer = setTimeout(() => {
+        checkUsername();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [watchUsername, activeTab, checkUsernameAvailability]);
+
+  React.useEffect(() => {
+    if (activeTab === 'register' && watchEmail) {
+      const checkEmail = async () => {
+        if (watchEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+          const isAvailable = await checkEmailAvailability(watchEmail);
+          setIsEmailAvailable(isAvailable);
+        }
+      };
+      
+      const timer = setTimeout(() => {
+        checkEmail();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [watchEmail, activeTab, checkEmailAvailability]);
+
   const onLoginSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
     
@@ -123,6 +163,10 @@ const Login = () => {
   };
 
   const onRegisterSubmit = async (data: RegisterFormValues) => {
+    if (!isUsernameAvailable || !isEmailAvailable) {
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
@@ -369,10 +413,19 @@ const Login = () => {
                               <div className="relative">
                                 <User className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
                                 <Input 
-                                  placeholder="Choose a username" 
+                                  placeholder="Choose a unique username" 
                                   className="pl-9" 
                                   {...field} 
                                 />
+                                {field.value.length >= 3 && (
+                                  <div className="absolute right-3 top-3">
+                                    {isUsernameAvailable ? (
+                                      <span className="text-green-500 text-sm">Available</span>
+                                    ) : (
+                                      <span className="text-red-500 text-sm">Username taken</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -394,6 +447,15 @@ const Login = () => {
                                   className="pl-9" 
                                   {...field} 
                                 />
+                                {field.value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) && (
+                                  <div className="absolute right-3 top-3">
+                                    {isEmailAvailable ? (
+                                      <span className="text-green-500 text-sm">Available</span>
+                                    ) : (
+                                      <span className="text-red-500 text-sm">Email taken</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -440,7 +502,7 @@ const Login = () => {
                       <Button 
                         type="submit" 
                         className="w-full bg-codegen-purple hover:bg-codegen-purple/90"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || !isUsernameAvailable || !isEmailAvailable}
                       >
                         {isSubmitting ? (
                           <span className="flex items-center">
