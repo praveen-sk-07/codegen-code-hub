@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { useForm, ValidationError } from '@formspree/react';
+import { useForm as useFormspree } from '@formspree/react';
 import { z } from 'zod';
+import { useForm as useReactHookForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from '@/components/ui/button';
@@ -29,9 +30,10 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
   const { toast } = useToast();
   
   // Use Formspree's hook
-  const [formspreeState, handleFormspreeSubmit] = useForm("xeoanvav");
+  const [formspreeState, handleFormspreeSubmit] = useFormspree("xeoanvav");
   
-  const form = useForm<FormValues>({
+  // Use React Hook Form
+  const form = useReactHookForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
@@ -115,7 +117,6 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
                     <Input type="email" placeholder="Your email address" {...field} />
                   </FormControl>
                   <FormMessage />
-                  <ValidationError prefix="Email" field="email" errors={formspreeState.errors} />
                 </FormItem>
               )}
             />
@@ -159,7 +160,6 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
                     />
                   </FormControl>
                   <FormMessage />
-                  <ValidationError prefix="Message" field="message" errors={formspreeState.errors} />
                 </FormItem>
               )}
             />
