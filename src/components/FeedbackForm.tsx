@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useForm as useFormspree } from '@formspree/react';
+import React from 'react';
+import { useForm, ValidationError } from '@formspree/react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from "@/components/ui/use-toast";
@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Send, X, Loader2 } from 'lucide-react';
-import { useForm } from 'react-hook-form';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters long" }),
@@ -28,12 +27,10 @@ interface FeedbackFormProps {
 
 const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Use Formspree's hook
-  const [formspreeState, handleFormspreeSubmit] = useFormspree("xeoanvav");
+  const [formspreeState, handleFormspreeSubmit] = useForm("xeoanvav");
   
-  // Use react-hook-form for form validation
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,8 +43,6 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
   
   const onSubmit = async (data: FormValues) => {
     try {
-      setIsSubmitting(true);
-      
       // Send the form data to Formspree
       await handleFormspreeSubmit({
         name: data.name,
@@ -75,8 +70,6 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
         description: "There was a problem submitting your feedback. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
   
@@ -122,6 +115,7 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
                     <Input type="email" placeholder="Your email address" {...field} />
                   </FormControl>
                   <FormMessage />
+                  <ValidationError prefix="Email" field="email" errors={formspreeState.errors} />
                 </FormItem>
               )}
             />
@@ -165,6 +159,7 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
                     />
                   </FormControl>
                   <FormMessage />
+                  <ValidationError prefix="Message" field="message" errors={formspreeState.errors} />
                 </FormItem>
               )}
             />
@@ -173,9 +168,9 @@ const FeedbackForm = ({ onClose }: FeedbackFormProps) => {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={isSubmitting || formspreeState.submitting}
+                disabled={formspreeState.submitting}
               >
-                {(isSubmitting || formspreeState.submitting) ? (
+                {formspreeState.submitting ? (
                   <span className="flex items-center">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
                   </span>

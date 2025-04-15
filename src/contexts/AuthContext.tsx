@@ -39,8 +39,6 @@ interface AuthContextType {
   updateUser: (data: Partial<User>) => void;
   incrementProblemsSolved: (points: number) => void;
   getUsersFromSameOrganization: () => User[];
-  checkUsernameAvailability: (username: string) => Promise<boolean>;
-  checkEmailAvailability: (email: string) => Promise<boolean>;
 }
 
 export interface RegisterData {
@@ -125,20 +123,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     
     return () => unsubscribe();
   }, []);
-
-  const checkUsernameAvailability = async (username: string): Promise<boolean> => {
-    // In a real app, this would be a backend call
-    // Here we're just checking against our local storage users
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    return !allUsers.some(u => u.username === username && u.id !== user?.id);
-  };
-  
-  const checkEmailAvailability = async (email: string): Promise<boolean> => {
-    // In a real app, this would be a backend call
-    // Here we're just checking against our local storage users
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    return !allUsers.some(u => u.email === email && u.id !== user?.id);
-  };
 
   const register = async (data: RegisterData): Promise<void> => {
     setIsLoading(true);
@@ -362,8 +346,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         updateUser,
         incrementProblemsSolved,
         getUsersFromSameOrganization,
-        checkUsernameAvailability,
-        checkEmailAvailability,
       }}
     >
       {children}
