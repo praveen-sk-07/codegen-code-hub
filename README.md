@@ -2,7 +2,7 @@
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/e93da1d1-1988-4a4b-939d-e4f0489e9d2c
+**URL**: https://codegen-ace.netlify.app
 
 ## How can I edit this code?
 
